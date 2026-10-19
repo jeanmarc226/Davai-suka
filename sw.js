@@ -14,9 +14,17 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
-  );
+  e.waitUntil((async () => {
+    const cache = await caches.open(CACHE_VERSION);
+    await Promise.all(ASSETS.map(async (asset) => {
+      const fresh = new URL(asset, self.location.href);
+      fresh.searchParams.set('__sw', String(Date.now()));
+      const res = await fetch(new Request(fresh.toString(), { cache: 'reload' }));
+      if (!res.ok) throw new Error(asset);
+      await cache.put(asset, res);
+    }));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (e) => {
@@ -42,6 +50,21 @@ function isNetworkFirst(request, url) {
     || path.endsWith('/app.js')
     || path.endsWith('/styles.css')
     || path.endsWith('.webmanifest');
+}
+
+// Nouvelle URL à chaque fois : sinon Chrome peut rendre la copie HTTP
+// déjà en mémoire, et l'ancienne version reste affichée.
+function networkFetch(request) {
+  const url = new URL(request.url);
+  url.searchParams.set('__sw', String(Date.now()));
+  const mode = request.mode === 'navigate' || request.mode === 'no-cors' ? 'same-origin' : request.mode;
+  return fetch(new Request(url.toString(), {
+    method: 'GET',
+    cache: 'reload',
+    credentials: 'same-origin',
+    redirect: 'follow',
+    mode,
+  }));
 }
 
 function remember(request, response) {
@@ -78,7 +101,7 @@ self.addEventListener('fetch', (e) => {
   if (!isNetworkFirst(e.request, url)) return;
 
   e.respondWith(
-    fetch(e.request, { cache: 'reload' })
+    networkFetch(e.request)
       .then((res) => remember(e.request, res).then(() => res))
       .catch(() => fromCache(e.request))
   );
