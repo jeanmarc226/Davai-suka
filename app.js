@@ -91,6 +91,7 @@ function exKcal(ex, weight) {
 }
 
 /* ---------- Données ---------- */
+const TROPHY_EPOCH = '2026-10-19';
 let state = load();
 let ui = { weekOffset: 0, calMode: 'week', monthCursor: null };
 
@@ -122,7 +123,6 @@ function load() {
   } catch (e) { console.warn('Lecture des données impossible', e); }
   return { program: freshProgram(), weight: DEFAULT_WEIGHT, weightSet: false, weightUnit: 'kg', days: {}, bonusDays: {}, sessions: [], today: null, seenTrophies: [], trophiesStartDate: TROPHY_EPOCH, trophiesEpochApplied: true, parenNamesMigrated: true };
 }
-const TROPHY_EPOCH = '2026-10-19';
 function trophyEpochFields(d) {
   const applied = d.trophiesEpochApplied === true;
   const start = typeof d.trophiesStartDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.trophiesStartDate)
