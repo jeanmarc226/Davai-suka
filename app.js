@@ -207,6 +207,19 @@ function weekCount(monday) {
   for (let i = 0; i < 7; i++) if (isDayChecked(dkey(addDays(monday, i)))) n++;
   return n;
 }
+const WEEK_MOTIVATION = {
+  7: 'Bien',
+  6: 'Insuffisant',
+  5: 'Bare minimum',
+  4: 'Décevant',
+  3: 'Minable',
+  2: 'Inacceptable',
+  1: 'Autant pas le faire'
+};
+function weekMotivation(n) {
+  if (WEEK_MOTIVATION[n]) return WEEK_MOTIVATION[n];
+  return 'Aucun jour coché pour l’instant.';
+}
 
 /* =========================================================================
    Écrans
@@ -320,7 +333,7 @@ function viewWeekGrid() {
   h += `</div>
   <div class="week-total"><div class="n" id="week-total">${n}<span> / 7</span></div>
   <div class="dots">${Array.from({ length: 7 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div>
-  <div class="muted" style="margin-top:10px">${n === 7 ? 'Semaine parfaite ! 🏆' : n >= 4 ? 'Belle régularité, continue ! 💪' : n > 0 ? 'C’est parti, garde le rythme !' : 'Aucun jour coché pour l’instant.'}</div></div>
+  <div class="muted" style="margin-top:10px">${esc(weekMotivation(n))}</div></div>
   </div>
   <p class="muted small" style="text-align:center">Touchez un jour pour le cocher / décocher. 🔥 = séance enregistrée ce jour-là.</p>`;
   return h;
