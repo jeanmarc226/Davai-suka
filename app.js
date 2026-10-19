@@ -23,23 +23,29 @@ const DEFAULT_PROGRAM = [
   { kind: 'ex', name: 'Pompes Classiques', type: 'reps', value: 25, note: '' },
   { kind: 'ex', name: 'Planche Statique', type: 'time', value: 60, note: '' },
   { kind: 'ex', name: 'Planche Hip Dips', type: 'time', value: 60, note: '' },
-  { kind: 'ex', name: 'Mountain climbers jambe droite', type: 'reps', value: 15, note: '' },
-  { kind: 'ex', name: 'Mountain climbers jambe gauche', type: 'reps', value: 15, note: '' },
+  { kind: 'ex', name: 'Grimpeur Jambe Droite', type: 'reps', value: 15, note: '' },
+  { kind: 'ex', name: 'Grimpeur Jambe Gauche', type: 'reps', value: 15, note: '' },
   { kind: 'pause' },
   { kind: 'ex', name: 'Pompes Classiques', type: 'reps', value: 20, note: '' },
-  { kind: 'ex', name: 'Push-ups longs', type: 'reps', value: 5, note: 'Le dernier très lent' },
-  { kind: 'ex', name: 'Hanging', type: 'time', value: 60, note: 'Avec 10 pull-ups minimum' }
+  { kind: 'ex', name: 'Pompes Larges', type: 'reps', value: 5, note: 'Le dernier très lent' },
+  { kind: 'ex', name: 'Suspension Barre Fixe', type: 'time', value: 60, note: 'Avec 10 pull-ups minimum' }
 ];
 
 // Noms par défaut d'avant le nettoyage. Une seule passe au chargement :
 // on retire le « (… ) » final, sans toucher au reste du programme ni aux séances.
 const LEGACY_PAREN_NAMES = {
   'Push-ups courts (pectoraux)': 'Pompes Classiques',
-  'Push-ups longs (plus difficiles)': 'Push-ups longs'
+  'Push-ups longs (plus difficiles)': 'Pompes Larges'
 };
 const LEGACY_POMPES_NAME = 'Push-ups courts';
+const LEGACY_POMPES_LARGES_NAME = 'Push-ups longs';
 const LEGACY_HIP_DIPS_NAME = 'Planche avec rotation du bassin gauche-droite';
 const LEGACY_PLANCHE_STATIQUE_NAME = 'Planche statique';
+const LEGACY_HANGING_NAME = 'Hanging';
+const LEGACY_GRIMPEUR_NAMES = {
+  'Mountain climbers jambe droite': 'Grimpeur Jambe Droite',
+  'Mountain climbers jambe gauche': 'Grimpeur Jambe Gauche'
+};
 
 function migrateSavedNames(program) {
   return program.map((e) => {
@@ -68,6 +74,32 @@ function renamePlancheStatique(program) {
   }
   return program;
 }
+function renameGrimpeurs(program) {
+  if (!Array.isArray(program)) return program;
+  for (const e of program) {
+    const next = e && e.kind === 'ex' ? LEGACY_GRIMPEUR_NAMES[e.name] : undefined;
+    if (next) e.name = next;
+  }
+  return program;
+}
+function renamePompesLarges(program) {
+  if (!Array.isArray(program)) return program;
+  for (const e of program) {
+    if (e && e.kind === 'ex' && e.name === LEGACY_POMPES_LARGES_NAME) e.name = 'Pompes Larges';
+  }
+  return program;
+}
+function renameSuspension(program) {
+  if (!Array.isArray(program)) return program;
+  for (const e of program) {
+    if (e && e.kind === 'ex' && e.name === LEGACY_HANGING_NAME) e.name = 'Suspension Barre Fixe';
+  }
+  return program;
+}
+function renameSavedProgram(program, migrated) {
+  const named = migrated ? program : migrateSavedNames(program);
+  return renameSuspension(renamePompesLarges(renameGrimpeurs(renamePlancheStatique(renamePlancheHipDips(renamePompesClassiques(named))))));
+}
 
 const MOTTOS = [
   'Chaque répétition compte. 💪',
@@ -85,7 +117,7 @@ const DAY_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
    kcal = MET × poids (kg) × durée (heures)
    Durée = valeur (si exercice en durée) ou répétitions × secondes par répétition. */
 const MET_PROFILES = [
-  { keys: ['mountain'], met: 8, spr: 1, label: 'Mountain climbers', noun: 'Mountain Climber', metNames: ['Mountain Climbers'] },
+  { keys: ['grimpeur', 'mountain'], met: 8, spr: 1, label: 'Grimpeurs', noun: 'Grimpeur', metNames: ['Grimpeurs'] },
   { keys: ['pull-up', 'pull up', 'pullup', 'traction', 'hanging', 'suspension', 'barre fixe'], met: 8, spr: 3, label: 'Tractions / suspension', noun: 'Traction', metNames: ['Tractions', 'Suspension'] },
   { keys: ['push-up', 'push up', 'pushup', 'pompe'], met: 8, spr: 2, label: 'Pompes / push-ups', noun: 'Pompe', metNames: ['Pompes'] },
   { keys: ['planche', 'plank', 'gainage'], met: 5, spr: 3, label: 'Planche / gainage', noun: 'Planche', metNames: ['Planche', 'Gainage'] },
@@ -124,6 +156,7 @@ function exKcal(ex, weight) {
 const TROPHY_EPOCH = '2026-10-18';
 let state = load();
 let ui = { weekOffset: 0, calMode: 'week', monthCursor: null, fold: {}, timerOpen: false };
+let shownTab = null;
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function foldAttr(id) { return ui.fold[id] ? ' open' : ''; }
@@ -139,7 +172,7 @@ function load() {
       const days = d.days && typeof d.days === 'object' && !Array.isArray(d.days) ? d.days : {};
       return {
         ...d,
-        program: renamePlancheStatique(renamePlancheHipDips(renamePompesClassiques(d.parenNamesMigrated ? program : migrateSavedNames(program)))),
+        program: renameSavedProgram(program, d.parenNamesMigrated),
         weight: d.weightSet && Number(d.weight) > 0 ? Number(d.weight) : DEFAULT_WEIGHT,
         weightSet: !!d.weightSet,
         weightUnit: d.weightUnit === 'lb' ? 'lb' : 'kg',
@@ -621,6 +654,8 @@ function currentTab() { const h = location.hash.replace('#', ''); return TABS.in
 
 function render() {
   const tab = currentTab();
+  if (tab === 'donnees' && shownTab !== 'donnees') ui.fold['donnees-fold'] = false;
+  shownTab = tab;
   document.body.classList.remove('home', 'semaine', 'calories', 'programme', 'trophees', 'donnees');
   document.body.classList.add(tab === 'accueil' ? 'home' : tab);
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
@@ -1112,7 +1147,7 @@ function bindKcalChart() {
 /* ----- 4. Programme ----- */
 function viewProgram() {
   const list = state.program;
-  let h = `<h2 class="screen-title">Programme</h2>${musicPanelHtml()}<div class="card"><h3>Ma séance</h3>`;
+  let h = `<h2 class="screen-title">Programme</h2><div class="card"><h3>Ma séance</h3>`;
   if (!list.length) h += `<div class="muted" style="margin-bottom:10px">Programme vide — ajoutez un exercice.</div>`;
   list.forEach((e, i) => {
     const pause = e.kind === 'pause';
@@ -1139,15 +1174,18 @@ function viewProgram() {
 function viewDonnees() {
   return `<h2 class="screen-title">Données</h2>
   <div class="card">
-    <p class="muted small" id="data-note">Données stockées uniquement sur ce téléphone. Pensez à faire une sauvegarde régulièrement.</p>
-    <div class="btn-row">
-      <button class="btn ghost" data-action="export">Exporter</button>
-      <button class="btn ghost" data-action="import">Importer</button>
-    </div>
-    <input id="import-file" type="file" accept="application/json,.json" class="hidden">
-    <div style="height:10px"></div>
-    <button class="btn ghost" data-action="reset-program">Remettre le programme par défaut</button>
-    <button class="btn danger" data-action="wipe">Effacer toutes les données</button>
+    <details class="fold" id="donnees-fold"${foldAttr('donnees-fold')}>
+      <summary>Sauvegarde <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
+      <p class="muted small" id="data-note">Données stockées uniquement sur ce téléphone. Pensez à faire une sauvegarde régulièrement.</p>
+      <div class="btn-row">
+        <button class="btn ghost" data-action="export">Exporter</button>
+        <button class="btn ghost" data-action="import">Importer</button>
+      </div>
+      <input id="import-file" type="file" accept="application/json,.json" class="hidden">
+      <div style="height:10px"></div>
+      <button class="btn ghost" data-action="reset-program">Remettre le programme par défaut</button>
+      <button class="btn danger" data-action="wipe">Effacer toutes les données</button>
+    </details>
   </div>
   <p class="muted small app-version" id="app-version">${esc(appVersionLabel())}</p>`;
 }
@@ -1829,7 +1867,7 @@ function importData(file) {
 
 document.addEventListener('toggle', (ev) => {
   const el = ev.target;
-  if (!el || (el.id !== 'reglages' && el.id !== 'calc-formula')) return;
+  if (!el || (el.id !== 'reglages' && el.id !== 'calc-formula' && el.id !== 'donnees-fold')) return;
   ui.fold[el.id] = !!el.open;
 }, true);
 
