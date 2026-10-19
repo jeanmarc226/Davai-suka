@@ -182,13 +182,9 @@ function viewHome() {
   const planKcal = exs.reduce((a, e) => a + exKcal(e, state.weight), 0);
   const planMin = Math.max(1, Math.round(exs.reduce((a, e) => a + exSeconds(e), 0) / 60));
   const motto = "T'as pas l'temps parce que t'es un lâche";
-  const words = APP_NAME.split(' ');
-  const nameHtml = words.length > 1
-    ? esc(words.slice(0, -1).join(' ')) + ' <span>' + esc(words[words.length - 1]) + '</span>'
-    : '<span>' + esc(APP_NAME) + '</span>';
 
   let h = `<section class="hero">
-    <h1 class="app-name">${nameHtml}</h1>
+    <h1 class="app-name" aria-label="${esc(APP_NAME)}">ДАVАЙ SUКА</h1>
     <p class="motto">${esc(motto)}</p>
     <span class="date-pill">📅 ${esc(fmtLong(now))}</span>
   </section>

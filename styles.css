@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Russo One";
+  src: url("./fonts/RussoOne-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #0f1218;
   --card: #181d26;
@@ -31,8 +39,16 @@ button { cursor: pointer; }
 
 /* --- En-têtes --- */
 .hero { padding: 12px 4px 8px; }
-.app-name { font-size: 40px; font-weight: 900; letter-spacing: -1px; line-height: 1.05; margin: 0; }
-.app-name span { color: var(--accent); }
+.app-name {
+  margin: 0;
+  color: #E10600;
+  font-family: "Russo One", sans-serif;
+  font-size: clamp(30px, 8.6vw, 44px);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
 .motto { color: var(--muted); margin: 8px 0 0; font-size: 17px; }
 .date-pill {
   display: inline-block; margin-top: 14px; padding: 6px 12px; border-radius: 999px;
