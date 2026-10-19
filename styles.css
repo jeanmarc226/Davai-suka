@@ -226,6 +226,18 @@ h3 { font-size: 18px; margin: 0 0 10px; }
 .dots { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
 .dots i { width: 28px; height: 6px; border-radius: 3px; background: var(--card2); }
 .dots i.on { background: var(--accent); }
+.cal-legend {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+}
+.cal-legend .sym { font-size: 13px; line-height: 1; }
 .cal-toggle { margin: 0 0 14px; }
 .month-jump { display: grid; grid-template-columns: 1.5fr .8fr; gap: 10px; margin-bottom: 14px; }
 .month-jump select {

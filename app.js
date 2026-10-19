@@ -650,7 +650,7 @@ function viewWeekGrid() {
   <div class="dots">${Array.from({ length: 7 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div>
   <div class="muted" id="week-motivation" style="margin-top:10px">${esc(weekMotivation(n))}</div></div>
   </div>
-  <p class="muted small" style="text-align:center">Touchez un jour pour le cocher. ★ Bonus : une séance en plus, sans calories si le jour est déjà passé. 🔥 = séance enregistrée ce jour-là.</p>`;
+  <p class="cal-legend"><span class="sym" aria-hidden="true">🔥</span><span>= séance enregistrée ce jour-là</span></p>`;
   return h;
 }
 function viewMonth() {
@@ -695,7 +695,7 @@ function viewMonth() {
   ${parts.bonus ? `<div class="bonus-note">${esc(bonusNote(parts.bonus))}</div>` : ''}
   <div class="muted" style="margin-top:8px">Présences du mois, bonus compris. Un jour coché compte dans les totaux, sans calories.</div></div>
   </div>
-  <p class="muted small" style="text-align:center">Touchez un jour pour le cocher. ★ marque une séance bonus. Les jours à venir sont verrouillés.</p>`;
+  <p class="cal-legend">Les jours à venir sont verrouillés.</p>`;
   return h;
 }
 
