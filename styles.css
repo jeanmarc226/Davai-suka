@@ -372,6 +372,20 @@ h3 { font-size: 18px; margin: 0 0 10px; }
 .fold .caret.open { display: none; }
 .fold[open] .caret.closed { display: none; }
 .fold[open] .caret.open { display: inline; }
+.calc-details > summary { align-items: center; }
+.calc-q {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #E10600; color: #fff;
+  font-family: "Russo One", sans-serif; font-size: 14px; line-height: 1;
+}
+.calc-title { flex: 1; min-width: 0; line-height: 1.25; }
+.calc-note {
+  margin: 10px 0 0; color: var(--text); font-size: 14px; line-height: 1.45;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 500; letter-spacing: 0;
+}
 .calc-legend { margin: 4px 0 0; }
 .calc-legend div {
   display: grid;
@@ -383,6 +397,9 @@ h3 { font-size: 18px; margin: 0 0 10px; }
 }
 .calc-legend dt { margin: 0; color: #E3B23C; font-size: 12px; font-weight: 800; }
 .calc-legend dd { margin: 0; color: var(--text); font-size: 14px; }
+.calc-legend .calc-duration { grid-template-columns: 1fr; gap: 6px; }
+.spr-legend { list-style: disc; margin: 0; padding-left: 1.15em; }
+.spr-legend li { margin: 3px 0; }
 .sess-list { list-style: none; padding: 0; margin: 0; }
 .sess-list li { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); gap: 10px; }
 .sess-list li:last-child { border-bottom: 0; }
