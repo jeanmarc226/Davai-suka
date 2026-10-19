@@ -1,6 +1,6 @@
 // Service worker : mise en cache pour fonctionner hors ligne.
 // Pensez à changer CACHE_VERSION à chaque mise à jour des fichiers.
-const CACHE_VERSION = 'davai-suka-v17';
+const CACHE_VERSION = 'davai-suka-v18';
 const ASSETS = [
   './',
   './index.html',
@@ -16,7 +16,9 @@ const ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
-  './icons/apple-touch-icon.png'
+  './icons/apple-touch-icon.png',
+  './audio/playlist.ogg',
+  './audio/playlist.mp3'
 ];
 
 self.addEventListener('install', (e) => {
@@ -41,9 +43,12 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Icônes, police et affiche : le cache suffit (elles changent avec CACHE_VERSION).
+// Icônes, police, affiches et musique : le cache suffit (elles changent avec CACHE_VERSION).
 function isCacheFirst(url) {
-  return url.pathname.includes('/icons/') || url.pathname.includes('/fonts/') || url.pathname.includes('/images/');
+  return url.pathname.includes('/icons/') || url.pathname.includes('/fonts/') || url.pathname.includes('/images/') || url.pathname.includes('/audio/');
+}
+function isAudio(url) {
+  return url.pathname.includes('/audio/');
 }
 
 // Navigation, HTML, script, feuille de style et manifeste : réseau d'abord,
@@ -74,10 +79,36 @@ function networkFetch(request) {
 }
 
 function remember(request, response) {
-  if (!response || !response.ok || response.type !== 'basic') return Promise.resolve();
+  if (!response || !response.ok || response.status === 206 || response.type !== 'basic') return Promise.resolve();
   const copy = response.clone();
   const key = new Request(request.url, { method: 'GET' });
   return caches.open(CACHE_VERSION).then((cache) => cache.put(key, copy)).catch(() => {});
+}
+
+// Le lecteur envoie souvent un en-tête Range. On sert le fichier entier mis en cache,
+// découpé si besoin, pour que la lecture reste hors ligne.
+async function maybeRange(request, response) {
+  const range = request.headers.get('range');
+  if (!range || response.status === 206) return response;
+  const m = /^bytes=(\d+)-(\d*)$/i.exec(range.trim());
+  if (!m) return response;
+  const buf = await response.clone().arrayBuffer();
+  const size = buf.byteLength;
+  if (!size) return response;
+  const start = Math.min(Number(m[1]), size);
+  let end = m[2] ? Number(m[2]) : size - 1;
+  if (end >= size) end = size - 1;
+  if (start >= size || start > end) {
+    return new Response(null, { status: 416, headers: { 'Content-Range': 'bytes */' + size } });
+  }
+  const slice = buf.slice(start, end + 1);
+  const headers = new Headers();
+  const type = response.headers.get('Content-Type');
+  if (type) headers.set('Content-Type', type);
+  headers.set('Accept-Ranges', 'bytes');
+  headers.set('Content-Range', 'bytes ' + start + '-' + end + '/' + size);
+  headers.set('Content-Length', String(slice.byteLength));
+  return new Response(slice, { status: 206, statusText: 'Partial Content', headers });
 }
 
 function fromCache(request) {
@@ -93,14 +124,22 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
   if (isCacheFirst(url)) {
-    e.respondWith(
-      caches.match(e.request, { ignoreSearch: true }).then((cached) => {
-        if (cached) return cached;
-        return fetch(e.request)
-          .then((res) => remember(e.request, res).then(() => res))
-          .catch(() => fromCache(e.request));
-      })
-    );
+    e.respondWith((async () => {
+      const cached = await caches.match(e.request, { ignoreSearch: true });
+      if (cached) return isAudio(url) ? maybeRange(e.request, cached) : cached;
+      if (isAudio(url)) {
+        const full = await fetch(new Request(url.toString(), { method: 'GET', cache: 'reload' }));
+        if (full.ok) {
+          await remember(new Request(url.toString()), full);
+          const stored = await caches.match(url.toString(), { ignoreSearch: true });
+          return maybeRange(e.request, stored || full);
+        }
+        return full;
+      }
+      const res = await fetch(e.request);
+      await remember(e.request, res);
+      return res;
+    })().catch(() => fromCache(e.request)));
     return;
   }
 

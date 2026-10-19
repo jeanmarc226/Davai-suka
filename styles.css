@@ -490,3 +490,60 @@ textarea { min-height: 70px; resize: vertical; }
 body.timer-live #app {
   padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 108px);
 }
+
+/* --- Musique --- */
+.music-box {
+  margin-top: 14px;
+  background: #080404;
+  border: 1px solid #E10600;
+  border-radius: 14px;
+  padding: 12px;
+}
+.music-head { display: flex; align-items: center; gap: 10px; }
+.music-head h3 {
+  margin: 0; flex: 1;
+  font-family: "Russo One", sans-serif; font-weight: 400;
+  font-size: 22px; color: #E10600;
+}
+.music-toggle {
+  min-height: 40px; padding: 0 12px; border-radius: 999px;
+  border: 1px solid #E10600; background: transparent; color: #E10600;
+  font-weight: 800; font-size: 13px;
+}
+.music-toggle.on { background: #E10600; color: #fff; }
+.music-hint { margin: 8px 0 10px; color: #8b96a8; font-size: 13px; }
+.music-actions { display: flex; flex-direction: column; gap: 8px; }
+.music-actions .btn { margin: 0; }
+.music-box .music-go {
+  background: #E10600; color: #fff;
+  font-family: "Russo One", sans-serif; letter-spacing: 0.03em;
+  box-shadow: none;
+}
+.music-box .music-stop-btn {
+  background: transparent; border: 1px solid #E10600; color: #E10600; font-weight: 800;
+}
+.music-float {
+  position: fixed; z-index: 47; left: 12px;
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + 12px);
+  display: flex; align-items: center; gap: 8px;
+  min-height: 48px; padding: 6px 6px 6px 14px;
+  background: #080404; color: #f2f5f8;
+  border: 1px solid #E10600; border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+}
+body.timer-live .music-float {
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + 78px);
+}
+.music-float-name {
+  font-family: "Russo One", sans-serif; color: #E10600; font-size: 15px;
+}
+.music-float-btn {
+  min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px;
+  background: #E10600; color: #fff; font-weight: 800;
+}
+body.music-live #app {
+  padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 96px);
+}
+body.timer-live.music-live #app {
+  padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 168px);
+}
