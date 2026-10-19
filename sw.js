@@ -13,6 +13,8 @@ const ASSETS = [
   './images/fond-semaine.jpg',
   './images/fond-calories.jpg',
   './images/fond-programme.jpg',
+  './images/fond-donnees.jpg',
+  './images/fond-medailles.jpg',
   './images/etoile-kremlin.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
