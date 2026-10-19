@@ -1,6 +1,6 @@
 // Service worker : mise en cache pour fonctionner hors ligne.
 // Pensez à changer CACHE_VERSION à chaque mise à jour des fichiers.
-const CACHE_VERSION = 'davai-suka-v5';
+const CACHE_VERSION = 'davai-suka-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './app.js',
   './manifest.webmanifest',
   './fonts/RussoOne-Regular.woff2',
+  './images/fond-urss.jpg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png'
@@ -35,9 +36,9 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Icônes et polices : le cache suffit (elles changent avec CACHE_VERSION).
+// Icônes, police et affiche : le cache suffit (elles changent avec CACHE_VERSION).
 function isCacheFirst(url) {
-  return url.pathname.includes('/icons/') || url.pathname.includes('/fonts/');
+  return url.pathname.includes('/icons/') || url.pathname.includes('/fonts/') || url.pathname.includes('/images/');
 }
 
 // Navigation, HTML, script, feuille de style et manifeste : réseau d'abord,

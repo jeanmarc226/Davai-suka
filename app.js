@@ -167,6 +167,7 @@ function currentTab() { const h = location.hash.replace('#', ''); return TABS.in
 
 function render() {
   const tab = currentTab();
+  document.body.classList.toggle('home', tab === 'accueil');
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   const app = document.getElementById('app');
   app.innerHTML = ({ accueil: viewHome, semaine: viewWeek, calories: viewCalories, programme: viewProgram })[tab]();
