@@ -526,8 +526,6 @@ function viewHome() {
   const done = sessionOn(k);
   const bonusDone = bonusSessionOn(k);
   const exs = exercises();
-  const planKcal = exs.reduce((a, e) => a + exKcal(e, state.weight), 0);
-  const planMin = Math.max(1, Math.round(exs.reduce((a, e) => a + exSeconds(e), 0) / 60));
   const motto = "T'as pas l'temps parce que t'es un lâche";
   const week = weekParts(mondayOf(now));
 
@@ -574,8 +572,6 @@ function viewHome() {
   if (!t.started) {
     h += `<div class="card">
       <h3>Séance du jour</h3>
-      <div class="muted">${exs.length} exercices · ≈ ${planMin} min d’effort · ≈ ${fmtKcal(planKcal)} kcal <span class="badge">Estimation</span></div>
-      <div style="height:14px"></div>
       <button class="btn primary" data-action="start">▶ Commencer la séance du jour</button>
       ${musicPanelHtml()}
     </div>`;
