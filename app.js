@@ -790,7 +790,6 @@ function viewProgram() {
         <div class="ex-name">${pause ? '— Pause —' : esc(e.name)}</div>
         ${pause ? '' : `<div class="ex-val">${esc(fmtVal(e))}</div>${e.note ? `<div class="ex-meta">${esc(e.note)}</div>` : ''}`}
       </div>
-      ${pause ? '' : timerExButton(e)}
       ${pause ? '' : `<button class="icon-btn" data-action="edit" data-id="${e.id}" aria-label="Modifier">✎</button>`}
       <button class="icon-btn del" data-action="delete" data-id="${e.id}" aria-label="Supprimer">✕</button>
     </div>`;
@@ -1249,7 +1248,7 @@ function timerPaint(full) {
   if (!bar || !fab || !screen) return;
   const live = timer.phase === 'countdown' || timer.phase === 'running' || timer.phase === 'paused' || timer.phase === 'done';
   bar.classList.toggle('hidden', !live || timerScreenOn);
-  fab.classList.toggle('hidden', live || timerScreenOn);
+  fab.classList.add('hidden');
   screen.classList.toggle('hidden', !timerScreenOn);
   document.body.classList.toggle('timer-live', live && !timerScreenOn);
 
@@ -1275,6 +1274,11 @@ function timerPaint(full) {
   } else {
     if (barName) barName.textContent = TIMER_LABEL[timer.selected] || '';
     if (barTime) barTime.textContent = formatTimer(timerDisplayMs());
+  }
+  const barMain = document.querySelector('.timer-bar-main');
+  if (barMain) {
+    if (currentTab() === 'accueil') barMain.dataset.action = 'timer-open';
+    else delete barMain.dataset.action;
   }
   const toggle = document.getElementById('timer-bar-toggle');
   if (toggle) {
@@ -1322,7 +1326,10 @@ function timerPaint(full) {
 }
 function onTimerAction(el) {
   const action = el.dataset.action;
-  if (action === 'timer-open') timerOpenScreen(el.dataset.kind || '');
+  if (action === 'timer-open') {
+    if (el.classList.contains('timer-bar-main') && currentTab() !== 'accueil') return;
+    timerOpenScreen(el.dataset.kind || '');
+  }
   else if (action === 'timer-close') { timerScreenOn = false; timerPaint(true); }
   else if (action === 'timer-pick') timerPick(el.dataset.kind);
   else if (action === 'timer-step') timerStep(Number(el.dataset.d) || 0);
