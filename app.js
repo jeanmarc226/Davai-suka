@@ -650,7 +650,10 @@ function viewWeekGrid() {
   <div class="dots">${Array.from({ length: 7 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div>
   <div class="muted" id="week-motivation" style="margin-top:10px">${esc(weekMotivation(n))}</div></div>
   </div>
-  <p class="cal-legend"><span class="sym" aria-hidden="true">🔥</span><span>= séance enregistrée ce jour-là</span></p>`;
+  <div class="cal-legends">
+    <p class="cal-legend"><span class="check on sym" aria-hidden="true">✓</span><span>= séance complétée précédemment</span></p>
+    <p class="cal-legend"><span class="sym" aria-hidden="true">🔥</span><span>= séance enregistrée ce jour-là</span></p>
+  </div>`;
   return h;
 }
 function viewMonth() {
