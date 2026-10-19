@@ -112,13 +112,20 @@ function load() {
         weightSet: !!d.weightSet,
         weightUnit: d.weightUnit === 'lb' ? 'lb' : 'kg',
         days,
+        bonusDays: boolMap(d.bonusDays),
         sessions: Array.isArray(d.sessions) ? d.sessions : [],
         today: d.today || null,
         parenNamesMigrated: true
       };
     }
   } catch (e) { console.warn('Lecture des données impossible', e); }
-  return { program: freshProgram(), weight: DEFAULT_WEIGHT, weightSet: false, weightUnit: 'kg', days: {}, sessions: [], today: null, parenNamesMigrated: true };
+  return { program: freshProgram(), weight: DEFAULT_WEIGHT, weightSet: false, weightUnit: 'kg', days: {}, bonusDays: {}, sessions: [], today: null, parenNamesMigrated: true };
+}
+function boolMap(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const k of Object.keys(raw)) if (raw[k] === true || raw[k] === false) out[k] = raw[k];
+  return out;
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -191,23 +198,55 @@ function toast(msg) {
   clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 2200);
 }
 const exercises = () => state.program.filter((e) => e.kind === 'ex');
-const sessionOn = (k) => state.sessions.find((s) => s.date === k);
+const mainSessionOn = (k) => state.sessions.find((s) => s.date === k && !s.bonus);
+const bonusSessionOn = (k) => state.sessions.find((s) => s.date === k && s.bonus);
+const sessionOn = mainSessionOn;
+const loggedOn = (k) => state.sessions.some((s) => s.date === k);
 function isDayChecked(k) {
   if (state.days[k] === true) return true;
   if (state.days[k] === false) return false;
   return !!sessionOn(k);
+}
+function isBonus(k) {
+  const map = state.bonusDays;
+  if (map && typeof map === 'object' && !Array.isArray(map)) {
+    if (map[k] === true) return true;
+    if (map[k] === false) return false;
+  }
+  return !!bonusSessionOn(k);
+}
+function ensureBonusMap() {
+  if (!state.bonusDays || typeof state.bonusDays !== 'object' || Array.isArray(state.bonusDays)) state.bonusDays = {};
+  return state.bonusDays;
 }
 function ensureToday() {
   const k = todayKey();
   if (!state.today || state.today.date !== k) state.today = { date: k, started: false, checked: [] };
   return state.today;
 }
-function weekCount(monday) {
-  let n = 0;
-  for (let i = 0; i < 7; i++) if (isDayChecked(dkey(addDays(monday, i)))) n++;
-  return n;
+function weekParts(monday) {
+  let main = 0, bonus = 0;
+  for (let i = 0; i < 7; i++) {
+    const k = dkey(addDays(monday, i));
+    if (isDayChecked(k)) main++;
+    if (isBonus(k)) bonus++;
+  }
+  return { main, bonus, total: main + bonus };
+}
+function weekCount(monday) { return weekParts(monday).total; }
+function monthParts(y, m) {
+  const dim = new Date(y, m + 1, 0).getDate();
+  let main = 0, bonus = 0;
+  for (let d = 1; d <= dim; d++) {
+    const k = dkey(new Date(y, m, d));
+    if (isDayChecked(k)) main++;
+    if (isBonus(k)) bonus++;
+  }
+  return { main, bonus, total: main + bonus };
 }
 const WEEK_MOTIVATION = {
+  9: 'Au-dessus des attentes',
+  8: 'Good shit',
   7: 'Bien',
   6: 'Insuffisant',
   5: 'Bare minimum',
@@ -217,8 +256,12 @@ const WEEK_MOTIVATION = {
   1: 'Autant pas le faire'
 };
 function weekMotivation(n) {
+  if (n >= 10) return 'Impressionnant';
   if (WEEK_MOTIVATION[n]) return WEEK_MOTIVATION[n];
   return 'Aucun jour coché pour l’instant.';
+}
+function bonusNote(n) {
+  return n > 0 ? `+${n} bonus` : '';
 }
 
 /* =========================================================================
@@ -242,10 +285,12 @@ function viewHome() {
   const t = ensureToday();
   const k = todayKey();
   const done = sessionOn(k);
+  const bonusDone = bonusSessionOn(k);
   const exs = exercises();
   const planKcal = exs.reduce((a, e) => a + exKcal(e, state.weight), 0);
   const planMin = Math.max(1, Math.round(exs.reduce((a, e) => a + exSeconds(e), 0) / 60));
   const motto = "T'as pas l'temps parce que t'es un lâche";
+  const week = weekParts(mondayOf(now));
 
   let h = `<section class="hero">
     <h1 class="app-name" aria-label="${esc(APP_NAME)}">ДАVАЙ SUКА</h1>
@@ -253,7 +298,7 @@ function viewHome() {
     <span class="date-pill">📅 ${esc(fmtLong(now))}</span>
   </section>
   <div class="stats" style="margin-top:16px">
-    <div class="stat"><div class="v">${weekCount(mondayOf(now))}<span class="muted" style="font-size:18px"> / 7</span></div><div class="l">Cette semaine</div></div>
+    <div class="stat"><div class="v">${week.total}<span class="muted" style="font-size:18px"> / 7</span></div><div class="l">Cette semaine${week.bonus ? ` · ${esc(bonusNote(week.bonus))}` : ''}</div></div>
     <div class="stat"><div class="v o">${state.sessions.length}</div><div class="l">Séances au total</div></div>
   </div>`;
 
@@ -262,8 +307,28 @@ function viewHome() {
       <div class="big">✅ Séance du jour terminée !</div>
       <div class="muted" style="margin-top:6px">${done.exDone}/${done.exTotal} exercices · ≈ ${fmtKcal(done.kcal)} kcal <span class="badge">Estimation</span></div>
       <div style="margin-top:6px">Bravo, à demain 🔥</div>
-    </div>
-    <button class="btn ghost" data-action="undo-session">Annuler la séance du jour</button>`;
+    </div>`;
+    if (bonusDone) {
+      h += `<div class="done-banner bonus-banner">
+        <div class="big">★ Séance bonus enregistrée</div>
+        <div class="muted" style="margin-top:6px">${bonusDone.exDone}/${bonusDone.exTotal} exercices · ≈ ${fmtKcal(bonusDone.kcal)} kcal <span class="badge">Estimation</span></div>
+      </div>
+      <button class="btn ghost" data-action="undo-bonus">Annuler la séance bonus</button>`;
+    } else if (t.bonus && t.bonus.started) {
+      const checked = Array.isArray(t.bonus.checked) ? t.bonus.checked : [];
+      const nDone = exs.filter((e) => checked.includes(e.id)).length;
+      const pct = exs.length ? Math.round((nDone / exs.length) * 100) : 0;
+      h += `<div class="card">
+        <div class="row"><h3 style="margin:0">Séance bonus</h3><div class="spacer"></div><strong id="count">${nDone} / ${exs.length}</strong></div>
+        <div class="progress"><div style="width:${pct}%"></div></div>
+        ${exerciseChecklist(checked, 'toggle-bonus-ex')}
+      </div>
+      <button class="btn orange" data-action="finish-bonus">Séance bonus terminée</button>
+      <p class="muted small" style="text-align:center">Même programme que la séance du jour. Les calories sont calculées de la même façon.</p>`;
+    } else {
+      h += `<button class="btn orange" data-action="start-bonus">Séance bonus</button>`;
+    }
+    h += `<button class="btn ghost" data-action="undo-session">Annuler la séance du jour</button>`;
     return h;
   }
 
@@ -282,20 +347,24 @@ function viewHome() {
   h += `<div class="card">
     <div class="row"><h3 style="margin:0">Séance du jour</h3><div class="spacer"></div><strong id="count">${nDone} / ${exs.length}</strong></div>
     <div class="progress"><div style="width:${pct}%"></div></div>
-    <ul class="ex-list">`;
+    ${exerciseChecklist(t.checked, 'toggle-ex')}
+  </div>
+  <button class="btn primary" data-action="finish">🏁 Séance terminée</button>
+  <p class="muted small" style="text-align:center">Les calories sont calculées sur les exercices cochés (tous si aucun n’est coché).</p>`;
+  return h;
+}
+function exerciseChecklist(checked, action) {
+  let html = `<ul class="ex-list">`;
   for (const e of state.program) {
-    if (e.kind === 'pause') { h += `<li class="pause-sep">Pause</li>`; continue; }
-    const on = t.checked.includes(e.id);
-    h += `<li class="ex-item ${on ? 'done' : ''}" data-action="toggle-ex" data-id="${e.id}" role="checkbox" aria-checked="${on}" tabindex="0">
+    if (e.kind === 'pause') { html += `<li class="pause-sep">Pause</li>`; continue; }
+    const on = checked.includes(e.id);
+    html += `<li class="ex-item ${on ? 'done' : ''}" data-action="${action}" data-id="${e.id}" role="checkbox" aria-checked="${on}" tabindex="0">
       <span class="check">✓</span>
       <div><div class="ex-name">${esc(e.name)}</div>${e.note ? `<div class="ex-meta">${esc(e.note)}</div>` : ''}</div>
       <span class="ex-val">${esc(fmtVal(e))}</span>
     </li>`;
   }
-  h += `</ul></div>
-  <button class="btn primary" data-action="finish">🏁 Séance terminée</button>
-  <p class="muted small" style="text-align:center">Les calories sont calculées sur les exercices cochés (tous si aucun n’est coché).</p>`;
-  return h;
+  return html + `</ul>`;
 }
 
 /* ----- 2. Semaine ----- */
@@ -314,7 +383,8 @@ function viewWeekGrid() {
   const tk = todayKey();
   const off = ui.weekOffset;
   const title = off === 0 ? 'Cette semaine' : off === -1 ? 'Semaine dernière' : `Il y a ${-off} semaines`;
-  const n = weekCount(monday);
+  const parts = weekParts(monday);
+  const n = parts.total;
   let h = `<div class="week-nav">
     <button class="icon-btn" data-action="week-prev" aria-label="Semaine précédente">‹</button>
     <div class="lbl">${title}<div class="muted small">${esc(fmtShort(monday))} – ${esc(fmtShort(sunday))}</div></div>
@@ -323,19 +393,25 @@ function viewWeekGrid() {
   <div class="card"><div class="week">`;
   for (let i = 0; i < 7; i++) {
     const d = addDays(monday, i), k = dkey(d);
-    const on = isDayChecked(k), future = k > tk;
-    h += `<button class="day ${k === tk ? 'today' : ''}" data-action="toggle-day" data-date="${k}" ${future ? 'disabled' : ''} aria-pressed="${on}" aria-label="${DAY_SHORT[i]} ${d.getDate()}">
-      <span class="dn">${DAY_SHORT[i]}</span><span class="dd">${d.getDate()}</span>
-      <span class="check ${on ? 'on' : ''}">✓</span>
-      <span class="fire">${sessionOn(k) ? '🔥' : ''}</span>
-    </button>`;
+    const on = isDayChecked(k), bonus = isBonus(k), future = k > tk;
+    h += `<div class="day-col">
+      <button class="day ${k === tk ? 'today' : ''}" data-action="toggle-day" data-date="${k}" ${future ? 'disabled' : ''} aria-pressed="${on}" aria-label="${DAY_SHORT[i]} ${d.getDate()}">
+        <span class="dn">${DAY_SHORT[i]}</span><span class="dd">${d.getDate()}</span>
+        <span class="check ${on ? 'on' : ''}">✓</span>
+        <span class="fire">${loggedOn(k) ? '🔥' : ''}</span>
+      </button>
+      <button type="button" class="bonus-btn${bonus ? ' on' : ''}" data-action="toggle-bonus" data-date="${k}" ${future ? 'disabled' : ''} aria-pressed="${bonus}" aria-label="Bonus ${DAY_SHORT[i]} ${d.getDate()}">
+        <span class="star" aria-hidden="true">★</span><span class="bonus-lbl">Bonus</span>
+      </button>
+    </div>`;
   }
   h += `</div>
   <div class="week-total"><div class="n" id="week-total">${n}<span> / 7</span></div>
+  ${parts.bonus ? `<div class="bonus-note" id="bonus-note">${esc(bonusNote(parts.bonus))}</div>` : ''}
   <div class="dots">${Array.from({ length: 7 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div>
-  <div class="muted" style="margin-top:10px">${esc(weekMotivation(n))}</div></div>
+  <div class="muted" id="week-motivation" style="margin-top:10px">${esc(weekMotivation(n))}</div></div>
   </div>
-  <p class="muted small" style="text-align:center">Touchez un jour pour le cocher / décocher. 🔥 = séance enregistrée ce jour-là.</p>`;
+  <p class="muted small" style="text-align:center">Touchez un jour pour le cocher. ★ Bonus : une séance en plus, sans calories si le jour est déjà passé. 🔥 = séance enregistrée ce jour-là.</p>`;
   return h;
 }
 function viewMonth() {
@@ -346,15 +422,15 @@ function viewMonth() {
   const first = new Date(y, m, 1);
   const pad = (first.getDay() + 6) % 7;
   const dim = new Date(y, m + 1, 0).getDate();
-  let checked = 0;
-  for (let d = 1; d <= dim; d++) if (isDayChecked(dkey(new Date(y, m, d)))) checked++;
+  const parts = monthParts(y, m);
+  const checked = parts.total;
   const atMin = monthIndex(y, m) <= monthIndex(EARLIEST_MONTH.y, EARLIEST_MONTH.m);
   const atMax = monthIndex(y, m) >= monthIndex(now.getFullYear(), now.getMonth());
   const years = [];
   for (let yy = EARLIEST_MONTH.y; yy <= now.getFullYear(); yy++) years.push(yy);
   let h = `<div class="week-nav">
     <button class="icon-btn" data-action="month-prev" aria-label="Mois précédent" ${atMin ? 'disabled' : ''}>‹</button>
-    <div class="lbl">${esc(capMonth(m))} ${y}<div class="muted small">${checked} jour${checked > 1 ? 's' : ''}</div></div>
+    <div class="lbl">${esc(capMonth(m))} ${y}<div class="muted small">${checked} séance${checked > 1 ? 's' : ''}${parts.bonus ? ` · ${esc(bonusNote(parts.bonus))}` : ''}</div></div>
     <button class="icon-btn" data-action="month-next" aria-label="Mois suivant" ${atMax ? 'disabled' : ''}>›</button>
   </div>
   <div class="month-jump">
@@ -368,14 +444,19 @@ function viewMonth() {
   for (let d = 1; d <= dim; d++) {
     const k = dkey(new Date(y, m, d));
     const on = isDayChecked(k);
+    const bonus = isBonus(k);
     const future = k > tk;
-    h += `<button type="button" class="cal-day${on ? ' on' : ''}${k === tk ? ' today' : ''}" data-action="toggle-day" data-date="${k}" ${future ? 'disabled' : ''} aria-pressed="${on}" aria-label="${d} ${esc(MONTH_FR[m])} ${y}${on ? ', coché' : ''}">${d}${on ? '<span class="mark" aria-hidden="true">✓</span>' : ''}</button>`;
+    h += `<div class="cal-cell">
+      <button type="button" class="cal-day${on ? ' on' : ''}${k === tk ? ' today' : ''}" data-action="toggle-day" data-date="${k}" ${future ? 'disabled' : ''} aria-pressed="${on}" aria-label="${d} ${esc(MONTH_FR[m])} ${y}${on ? ', coché' : ''}">${d}${on ? '<span class="mark" aria-hidden="true">✓</span>' : ''}</button>
+      <button type="button" class="cal-bonus${bonus ? ' on' : ''}" data-action="toggle-bonus" data-date="${k}" ${future ? 'disabled' : ''} aria-pressed="${bonus}" aria-label="Bonus ${d} ${esc(MONTH_FR[m])} ${y}">★</button>
+    </div>`;
   }
   h += `</div>
-  <div class="week-total"><div class="n">${checked}<span> jour${checked > 1 ? 's' : ''}</span></div>
-  <div class="muted" style="margin-top:8px">Présences du mois. Un jour coché compte dans les totaux, sans calories.</div></div>
+  <div class="week-total"><div class="n" id="month-total">${checked}<span> séance${checked > 1 ? 's' : ''}</span></div>
+  ${parts.bonus ? `<div class="bonus-note">${esc(bonusNote(parts.bonus))}</div>` : ''}
+  <div class="muted" style="margin-top:8px">Présences du mois, bonus compris. Un jour coché compte dans les totaux, sans calories.</div></div>
   </div>
-  <p class="muted small" style="text-align:center">Touchez un jour passé pour le cocher. Les jours à venir sont verrouillés.</p>`;
+  <p class="muted small" style="text-align:center">Touchez un jour pour le cocher. ★ marque une séance bonus. Les jours à venir sont verrouillés.</p>`;
   return h;
 }
 
@@ -413,7 +494,7 @@ function viewCalories() {
   else {
     h += `<ul class="sess-list">`;
     for (const s of [...sess].reverse().slice(0, 60)) {
-      h += `<li><div><div class="ex-name" style="text-transform:capitalize">${esc(parseKey(s.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</div>
+      h += `<li><div><div class="ex-name" style="text-transform:capitalize">${esc(parseKey(s.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}${s.bonus ? ' · bonus' : ''}</div>
       <div class="ex-meta">${s.exDone}/${s.exTotal} exercices · ${fmtKcal(s.weight)} kg</div></div><span class="k">${fmtKcal(s.kcal)} kcal</span></li>`;
     }
     h += `</ul>`;
@@ -575,23 +656,44 @@ function moveItem(id, dir) {
   save(); render();
 }
 
+function recordSession(k, doneList, exs, bonus) {
+  const kcal = doneList.reduce((a, e) => a + exKcal(e, state.weight), 0);
+  state.sessions = state.sessions.filter((s) => !(s.date === k && !!s.bonus === !!bonus));
+  const entry = {
+    id: uid(), date: k, at: new Date().toISOString(),
+    kcal: Math.round(kcal * 10) / 10, weight: state.weight,
+    exDone: doneList.length, exTotal: exs.length,
+    seconds: doneList.reduce((a, e) => a + exSeconds(e), 0)
+  };
+  if (bonus) entry.bonus = true;
+  state.sessions.push(entry);
+  return entry.kcal;
+}
 function finishSession() {
   const t = ensureToday();
   const exs = exercises();
   let doneList = exs.filter((e) => t.checked.includes(e.id));
   if (!doneList.length) { doneList = exs; t.checked = exs.map((e) => e.id); }
-  const kcal = doneList.reduce((a, e) => a + exKcal(e, state.weight), 0);
   const k = todayKey();
-  state.sessions = state.sessions.filter((s) => s.date !== k);
-  state.sessions.push({
-    id: uid(), date: k, at: new Date().toISOString(),
-    kcal: Math.round(kcal * 10) / 10, weight: state.weight,
-    exDone: doneList.length, exTotal: exs.length,
-    seconds: doneList.reduce((a, e) => a + exSeconds(e), 0)
-  });
+  const kcal = recordSession(k, doneList, exs, false);
   state.days[k] = true;
   save(); render();
   toast(`Bravo ! ≈ ${fmtKcal(kcal)} kcal brûlées 🔥`);
+}
+function finishBonus() {
+  const t = ensureToday();
+  if (!mainSessionOn(todayKey())) return;
+  if (!t.bonus) t.bonus = { started: true, checked: [] };
+  const exs = exercises();
+  const checked = Array.isArray(t.bonus.checked) ? t.bonus.checked : [];
+  let doneList = exs.filter((e) => checked.includes(e.id));
+  if (!doneList.length) { doneList = exs; t.bonus.checked = exs.map((e) => e.id); }
+  const k = todayKey();
+  const kcal = recordSession(k, doneList, exs, true);
+  ensureBonusMap()[k] = true;
+  t.bonus.started = false;
+  save(); render();
+  toast(`Séance bonus enregistrée · ≈ ${fmtKcal(kcal)} kcal`);
 }
 
 function exportData() {
@@ -633,12 +735,35 @@ document.addEventListener('click', (ev) => {
       save(); render(); break;
     }
     case 'finish': finishSession(); break;
+    case 'start-bonus': {
+      if (!mainSessionOn(todayKey())) return;
+      const t = ensureToday();
+      t.bonus = { started: true, checked: [] };
+      save(); render(); break;
+    }
+    case 'toggle-bonus-ex': {
+      const t = ensureToday();
+      if (!t.bonus) t.bonus = { started: true, checked: [] };
+      const checked = Array.isArray(t.bonus.checked) ? t.bonus.checked : [];
+      t.bonus.checked = checked.includes(id) ? checked.filter((x) => x !== id) : [...checked, id];
+      save(); render(); break;
+    }
+    case 'finish-bonus': finishBonus(); break;
     case 'undo-session': {
       if (!confirm('Annuler la séance d’aujourd’hui ? Ses calories seront retirées.')) return;
       const k = todayKey();
-      state.sessions = state.sessions.filter((s) => s.date !== k);
+      state.sessions = state.sessions.filter((s) => !(s.date === k && !s.bonus));
       delete state.days[k];
       ensureToday().started = true;
+      save(); render(); break;
+    }
+    case 'undo-bonus': {
+      if (!confirm('Annuler la séance bonus ? Ses calories seront retirées.')) return;
+      const k = todayKey();
+      state.sessions = state.sessions.filter((s) => !(s.date === k && s.bonus));
+      ensureBonusMap()[k] = false;
+      const t = ensureToday();
+      t.bonus = { started: false, checked: [] };
       save(); render(); break;
     }
     case 'week-prev': ui.weekOffset--; render(); break;
@@ -657,6 +782,14 @@ document.addEventListener('click', (ev) => {
       const k = el.dataset.date;
       if (!k || k > todayKey()) return;
       state.days[k] = !isDayChecked(k);
+      save();
+      render();
+      break;
+    }
+    case 'toggle-bonus': {
+      const k = el.dataset.date;
+      if (!k || k > todayKey()) return;
+      ensureBonusMap()[k] = !isBonus(k);
       save();
       render();
       break;

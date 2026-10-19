@@ -183,6 +183,28 @@ h3 { font-size: 18px; margin: 0 0 10px; }
 .day .check { width: 34px; height: 34px; min-width: 34px; }
 .day:disabled { opacity: .35; }
 .day .fire { font-size: 12px; height: 14px; line-height: 14px; }
+.day-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.day-col .day { width: 100%; min-height: 92px; padding: 8px 0; }
+.bonus-btn, .cal-bonus {
+  border: 1px dashed rgba(255, 138, 61, .75);
+  background: transparent;
+  color: var(--orange);
+  font-weight: 800;
+  line-height: 1;
+}
+.bonus-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  width: 100%; min-height: 40px; border-radius: 10px; padding: 3px 0;
+}
+.bonus-btn .star { font-size: 13px; }
+.bonus-btn .bonus-lbl { font-size: 8px; letter-spacing: 0; }
+.bonus-btn.on, .cal-bonus.on { background: var(--orange); color: #1d0e02; border-style: solid; }
+.bonus-btn:disabled, .cal-bonus:disabled { opacity: .35; }
+.bonus-note { color: var(--orange); font-weight: 800; margin-top: 4px; }
+.done-banner.bonus-banner {
+  background: linear-gradient(135deg, rgba(255,138,61,.2), rgba(255,138,61,.05));
+  border-color: rgba(255,138,61,.5);
+}
 .week-total { text-align: center; margin: 20px 0 6px; }
 .week-total .n { font-size: 56px; font-weight: 900; letter-spacing: -2px; }
 .week-total .n span { color: var(--muted); font-size: 32px; }
@@ -209,6 +231,10 @@ h3 { font-size: 18px; margin: 0 0 10px; }
 .cal-day .mark { font-size: 12px; line-height: 1; }
 .cal-day:disabled { opacity: .35; }
 .cal-empty { min-height: 48px; }
+.cal-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cal-bonus {
+  min-height: 32px; border-radius: 8px; font-size: 13px; padding: 0;
+}
 
 /* --- Graphique --- */
 .chart-wrap { width: 100%; overflow: hidden; }
