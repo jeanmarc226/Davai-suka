@@ -21,8 +21,8 @@ const KG_PER_LB = 0.45359237;
 
 const DEFAULT_PROGRAM = [
   { kind: 'ex', name: 'Pompes Classiques', type: 'reps', value: 25, note: '' },
-  { kind: 'ex', name: 'Planche statique', type: 'time', value: 60, note: '' },
-  { kind: 'ex', name: 'Planche avec rotation du bassin gauche-droite', type: 'time', value: 60, note: '' },
+  { kind: 'ex', name: 'Planche Statique', type: 'time', value: 60, note: '' },
+  { kind: 'ex', name: 'Planche Hip Dips', type: 'time', value: 60, note: '' },
   { kind: 'ex', name: 'Mountain climbers jambe droite', type: 'reps', value: 15, note: '' },
   { kind: 'ex', name: 'Mountain climbers jambe gauche', type: 'reps', value: 15, note: '' },
   { kind: 'pause' },
@@ -38,6 +38,8 @@ const LEGACY_PAREN_NAMES = {
   'Push-ups longs (plus difficiles)': 'Push-ups longs'
 };
 const LEGACY_POMPES_NAME = 'Push-ups courts';
+const LEGACY_HIP_DIPS_NAME = 'Planche avec rotation du bassin gauche-droite';
+const LEGACY_PLANCHE_STATIQUE_NAME = 'Planche statique';
 
 function migrateSavedNames(program) {
   return program.map((e) => {
@@ -49,6 +51,20 @@ function renamePompesClassiques(program) {
   if (!Array.isArray(program)) return program;
   for (const e of program) {
     if (e && e.kind === 'ex' && e.name === LEGACY_POMPES_NAME) e.name = 'Pompes Classiques';
+  }
+  return program;
+}
+function renamePlancheHipDips(program) {
+  if (!Array.isArray(program)) return program;
+  for (const e of program) {
+    if (e && e.kind === 'ex' && e.name === LEGACY_HIP_DIPS_NAME) e.name = 'Planche Hip Dips';
+  }
+  return program;
+}
+function renamePlancheStatique(program) {
+  if (!Array.isArray(program)) return program;
+  for (const e of program) {
+    if (e && e.kind === 'ex' && e.name === LEGACY_PLANCHE_STATIQUE_NAME) e.name = 'Planche Statique';
   }
   return program;
 }
@@ -123,7 +139,7 @@ function load() {
       const days = d.days && typeof d.days === 'object' && !Array.isArray(d.days) ? d.days : {};
       return {
         ...d,
-        program: renamePompesClassiques(d.parenNamesMigrated ? program : migrateSavedNames(program)),
+        program: renamePlancheStatique(renamePlancheHipDips(renamePompesClassiques(d.parenNamesMigrated ? program : migrateSavedNames(program)))),
         weight: d.weightSet && Number(d.weight) > 0 ? Number(d.weight) : DEFAULT_WEIGHT,
         weightSet: !!d.weightSet,
         weightUnit: d.weightUnit === 'lb' ? 'lb' : 'kg',
