@@ -311,6 +311,11 @@ function weekMotivation(n) {
 function bonusNote(n) {
   return n > 0 ? `+${n} bonus` : '';
 }
+function weekQuotaHtml(main, bonus) {
+  const n = Number(main) || 0;
+  const extra = Number(bonus) > 0 ? ` (+${Number(bonus)})` : '';
+  return `${n}<span class="quota-rest">/7${extra}</span>`;
+}
 
 /* ---------- Trophées (calculés, rien à saisir) ---------- */
 function pushRepsPerSession() {
@@ -621,7 +626,7 @@ function viewHome() {
     <span class="date-pill">📅 ${esc(fmtLong(now))}</span>
   </section>
   <div class="stats" style="margin-top:16px">
-    <div class="stat"><div class="v">${week.main}<span class="muted" style="font-size:18px"> / 7</span></div><div class="l">Cette semaine${week.bonus ? ` · ${esc(bonusNote(week.bonus))}` : ''}</div></div>
+    <div class="stat"><div class="v">${weekQuotaHtml(week.main, week.bonus)}</div><div class="l">Cette semaine</div></div>
     <div class="stat"><div class="v o">${state.sessions.length}</div><div class="l">Séances au total</div></div>
   </div>`;
 
@@ -729,8 +734,7 @@ function viewWeekGrid() {
     </div>`;
   }
   h += `</div>
-  <div class="week-total"><div class="n" id="week-total">${n}<span> / 7</span></div>
-  ${parts.bonus ? `<div class="bonus-note" id="bonus-note">${esc(bonusNote(parts.bonus))}</div>` : ''}
+  <div class="week-total"><div class="n" id="week-total">${weekQuotaHtml(n, parts.bonus)}</div>
   <div class="dots">${Array.from({ length: 7 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div>
   <div class="muted" id="week-motivation" style="margin-top:10px">${esc(weekMotivation(scored))}</div></div>
   </div>

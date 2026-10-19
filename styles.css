@@ -184,7 +184,8 @@ h3 { font-size: 18px; margin: 0 0 10px; }
 /* --- Statistiques --- */
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
 .stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
-.stat .v { font-size: 28px; font-weight: 900; color: var(--accent); line-height: 1.1; }
+.stat .v { font-size: 28px; font-weight: 900; color: var(--accent); line-height: 1.1; white-space: nowrap; }
+.stat .v .quota-rest { font-size: 18px; font-weight: 800; color: var(--muted); }
 .stat .v.o { color: var(--orange); }
 .stat .l { color: var(--muted); font-size: 13px; margin-top: 4px; }
 .badge {
