@@ -115,12 +115,28 @@ function load() {
         bonusDays: boolMap(d.bonusDays),
         sessions: Array.isArray(d.sessions) ? d.sessions : [],
         today: d.today || null,
-        seenTrophies: seenList(d.seenTrophies),
+        ...trophyEpochFields(d),
         parenNamesMigrated: true
       };
     }
   } catch (e) { console.warn('Lecture des données impossible', e); }
-  return { program: freshProgram(), weight: DEFAULT_WEIGHT, weightSet: false, weightUnit: 'kg', days: {}, bonusDays: {}, sessions: [], today: null, seenTrophies: [], parenNamesMigrated: true };
+  return { program: freshProgram(), weight: DEFAULT_WEIGHT, weightSet: false, weightUnit: 'kg', days: {}, bonusDays: {}, sessions: [], today: null, seenTrophies: [], trophiesStartDate: TROPHY_EPOCH, trophiesEpochApplied: true, parenNamesMigrated: true };
+}
+const TROPHY_EPOCH = '2026-10-19';
+function trophyEpochFields(d) {
+  const applied = d.trophiesEpochApplied === true;
+  const start = typeof d.trophiesStartDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.trophiesStartDate)
+    ? d.trophiesStartDate
+    : TROPHY_EPOCH;
+  return {
+    trophiesStartDate: start,
+    seenTrophies: applied ? seenList(d.seenTrophies) : [],
+    trophiesEpochApplied: true
+  };
+}
+function trophyStart() {
+  const s = state && state.trophiesStartDate;
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : TROPHY_EPOCH;
 }
 function seenList(raw) {
   return Array.isArray(raw) ? raw.filter((x) => typeof x === 'string') : [];
@@ -274,13 +290,32 @@ function bonusNote(n) {
 }
 
 /* ---------- Trophées (calculés, rien à saisir) ---------- */
-function isPushUp(ex) {
-  if (!ex || ex.kind === 'pause' || ex.type !== 'reps') return false;
-  const n = normalize(ex.name);
-  return n.includes('pompe') || n.includes('push-up') || n.includes('push up') || n.includes('pushup');
-}
 function pushRepsPerSession() {
-  return exercises().reduce((a, e) => a + (isPushUp(e) ? (Number(e.value) || 0) : 0), 0);
+  return programEstimates(state.program).push;
+}
+function nameHas(ex, keys) {
+  const n = normalize(ex && ex.name);
+  return keys.some((k) => n.includes(k));
+}
+function programEstimates(program) {
+  const list = Array.isArray(program) ? program : [];
+  let plankSec = 0, hangSec = 0, pulls = 0, push = 0;
+  for (const e of list) {
+    if (!e || e.kind === 'pause') continue;
+    if (e.type === 'reps' && nameHas(e, ['pompe', 'push-up', 'push up', 'pushup'])) push += Number(e.value) || 0;
+    if (e.type === 'time' && nameHas(e, ['planche', 'gainage'])) plankSec += Number(e.value) || 0;
+    if (nameHas(e, ['suspension', 'hanging', 'barre'])) {
+      if (e.type === 'time') hangSec += Number(e.value) || 0;
+      if (e.type === 'reps') pulls += Number(e.value) || 0;
+      else {
+        const m = String(e.note || '').match(/(\d+)/);
+        if (m) pulls += Number(m[1]);
+      }
+    } else if (e.type === 'reps' && nameHas(e, ['traction', 'pull-up', 'pull up', 'pullup'])) {
+      pulls += Number(e.value) || 0;
+    }
+  }
+  return { plankMin: plankSec / 60, hangMin: hangSec / 60, pulls, push };
 }
 function trophyBounds() {
   let min = null;
@@ -303,56 +338,84 @@ function eachDayKey(min, max, fn) {
     d = addDays(d, 1);
   }
 }
+function weekPartsSince(monday) {
+  const start = trophyStart();
+  let main = 0, bonus = 0;
+  for (let i = 0; i < 7; i++) {
+    const k = dkey(addDays(monday, i));
+    if (k < start) continue;
+    if (isDayChecked(k)) main++;
+    if (isBonus(k)) bonus++;
+  }
+  return { main, bonus };
+}
 function trophyFacts() {
-  const { min, max } = trophyBounds();
+  const { max } = trophyBounds();
+  const start = trophyStart();
   const now = new Date();
   let streak = 0, bestStreak = 0;
   const streakAt = {};
   const bonusDates = [];
   const sessionHits = [];
-  eachDayKey(min, max, (k) => {
-    if (isDayChecked(k)) {
-      streak++;
-      if (streak > bestStreak) bestStreak = streak;
-      for (const t of [7, 30, 100, 365]) if (streak === t && !streakAt[t]) streakAt[t] = k;
-      sessionHits.push(k);
-    } else streak = 0;
-    if (isBonus(k)) {
-      bonusDates.push(k);
-      sessionHits.push(k);
-    }
-  });
+  if (start <= max) {
+    eachDayKey(start, max, (k) => {
+      if (isDayChecked(k)) {
+        streak++;
+        if (streak > bestStreak) bestStreak = streak;
+        for (const t of [7, 30, 100, 365]) if (streak === t && !streakAt[t]) streakAt[t] = k;
+        sessionHits.push(k);
+      } else streak = 0;
+      if (isBonus(k)) {
+        bonusDates.push(k);
+        sessionHits.push(k);
+      }
+    });
+  }
   let bestWeekMain = 0, bestWeekSum = 0, perfectWeek = null, doubleWeek = null;
-  let monday = mondayOf(parseKey(min));
-  const lastMonday = mondayOf(parseKey(max));
-  while (monday <= lastMonday) {
-    const p = weekParts(monday);
-    if (p.main > bestWeekMain) bestWeekMain = p.main;
-    if (p.main + p.bonus > bestWeekSum) bestWeekSum = p.main + p.bonus;
-    const sunday = dkey(addDays(monday, 6));
-    if (p.main === 7 && !perfectWeek) perfectWeek = sunday;
-    if (p.main === 7 && p.bonus === 7 && !doubleWeek) doubleWeek = sunday;
-    monday = addDays(monday, 7);
+  if (start <= max) {
+    let monday = mondayOf(parseKey(start));
+    const lastMonday = mondayOf(parseKey(max));
+    while (monday <= lastMonday) {
+      const p = weekPartsSince(monday);
+      if (p.main > bestWeekMain) bestWeekMain = p.main;
+      if (p.main + p.bonus > bestWeekSum) bestWeekSum = p.main + p.bonus;
+      const sunday = dkey(addDays(monday, 6));
+      if (sunday >= start && p.main === 7 && !perfectWeek) perfectWeek = sunday;
+      if (sunday >= start && p.main === 7 && p.bonus === 7 && !doubleWeek) doubleWeek = sunday;
+      monday = addDays(monday, 7);
+    }
   }
   let bestMonth = { checked: 0, dim: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() };
   const completeMonths = [];
-  let cursor = new Date(parseKey(min).getFullYear(), parseKey(min).getMonth(), 1);
-  const endM = parseKey(max);
-  while (cursor.getFullYear() < endM.getFullYear() || (cursor.getFullYear() === endM.getFullYear() && cursor.getMonth() <= endM.getMonth())) {
-    const y = cursor.getFullYear(), m = cursor.getMonth();
-    const dim = new Date(y, m + 1, 0).getDate();
-    let checked = 0;
-    for (let day = 1; day <= dim; day++) if (isDayChecked(dkey(new Date(y, m, day)))) checked++;
-    const monthEnd = dkey(new Date(y, m, dim));
-    if (checked === dim && monthEnd <= max) completeMonths.push(monthEnd);
-    if (checked / dim > bestMonth.checked / bestMonth.dim) bestMonth = { checked, dim };
-    cursor = new Date(y, m + 1, 1);
+  if (start <= max) {
+    const startDate = parseKey(start);
+    let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const endM = parseKey(max);
+    while (cursor.getFullYear() < endM.getFullYear() || (cursor.getFullYear() === endM.getFullYear() && cursor.getMonth() <= endM.getMonth())) {
+      const y = cursor.getFullYear(), m = cursor.getMonth();
+      const dim = new Date(y, m + 1, 0).getDate();
+      let checked = 0;
+      for (let day = 1; day <= dim; day++) {
+        const k = dkey(new Date(y, m, day));
+        if (k >= start && isDayChecked(k)) checked++;
+      }
+      const monthEnd = dkey(new Date(y, m, dim));
+      const monthStart = dkey(new Date(y, m, 1));
+      if (monthStart >= start && checked === dim && monthEnd <= max) completeMonths.push(monthEnd);
+      if (checked / dim > bestMonth.checked / bestMonth.dim) bestMonth = { checked, dim };
+      cursor = new Date(y, m + 1, 1);
+    }
   }
-  const reps = pushRepsPerSession();
+  const est = programEstimates(state.program);
+  const n = sessionHits.length;
   return {
     bestStreak, streakAt, bestWeekMain, bestWeekSum, perfectWeek, doubleWeek,
-    bestMonth, completeMonths, bonusDates, sessionHits, reps,
-    pompes: sessionHits.length * reps
+    bestMonth, completeMonths, bonusDates, sessionHits,
+    reps: est.push, plankMin: est.plankMin, hangMin: est.hangMin, pullsPer: est.pulls,
+    pompes: n * est.push,
+    plank: n * est.plankMin,
+    hang: n * est.hangMin,
+    pulls: n * est.pulls
   };
 }
 function fmtTrophyDate(k) {
@@ -362,7 +425,11 @@ function fmtInt(n) { return Math.round(n).toLocaleString('fr-FR'); }
 function trophyBoard() {
   const f = trophyFacts();
   const hit = (list, n) => (list.length >= n ? list[n - 1] : null);
-  const pompeDate = (target) => (f.reps > 0 ? hit(f.sessionHits, Math.ceil(target / f.reps)) : null);
+  const amountDate = (per, target) => (per > 0 ? hit(f.sessionHits, Math.ceil(target / per)) : null);
+  const qty = (n) => {
+    const r = Math.round(n * 10) / 10;
+    return r.toLocaleString('fr-FR');
+  };
   const defs = [
     { id: 'streak-7', group: 'Régularité', name: 'Recrue', desc: '7 jours cochés d’affilée.', unlocked: f.bestStreak >= 7, date: f.streakAt[7] || null, progress: `${f.bestStreak} / 7 jours` },
     { id: 'streak-30', group: 'Régularité', name: 'Camarade discipliné', desc: '30 jours cochés d’affilée.', unlocked: f.bestStreak >= 30, date: f.streakAt[30] || null, progress: `${f.bestStreak} / 30 jours` },
@@ -379,9 +446,19 @@ function trophyBoard() {
     { id: 'sessions-100', group: 'Séances', name: '100 séances', desc: 'Cent séances au compteur.', unlocked: f.sessionHits.length >= 100, date: hit(f.sessionHits, 100), progress: `${f.sessionHits.length} / 100 séances` },
     { id: 'sessions-250', group: 'Séances', name: '250 séances', desc: 'Deux cent cinquante séances.', unlocked: f.sessionHits.length >= 250, date: hit(f.sessionHits, 250), progress: `${f.sessionHits.length} / 250 séances` },
     { id: 'sessions-500', group: 'Séances', name: '500 séances', desc: 'Cinq cents séances.', unlocked: f.sessionHits.length >= 500, date: hit(f.sessionHits, 500), progress: `${f.sessionHits.length} / 500 séances` },
-    { id: 'push-1000', group: 'Pompes', name: '1 000 pompes', desc: 'Estimation : séances × pompes du programme.', unlocked: f.pompes >= 1000, date: pompeDate(1000), progress: `${fmtInt(f.pompes)} / ${fmtInt(1000)} (estimation)` },
-    { id: 'push-10000', group: 'Pompes', name: '10 000 pompes', desc: 'Estimation d’après le programme actuel.', unlocked: f.pompes >= 10000, date: pompeDate(10000), progress: `${fmtInt(f.pompes)} / ${fmtInt(10000)} (estimation)` },
-    { id: 'push-50000', group: 'Pompes', name: '50 000 pompes', desc: 'Estimation. Le programme actuel sert de base.', unlocked: f.pompes >= 50000, date: pompeDate(50000), progress: `${fmtInt(f.pompes)} / ${fmtInt(50000)} (estimation)` }
+    { id: 'push-1000', group: 'Pompes', name: '1 000 pompes', desc: 'Estimation : séances × pompes du programme.', unlocked: f.pompes >= 1000, date: amountDate(f.reps, 1000), progress: `${fmtInt(f.pompes)} / ${fmtInt(1000)} (estimation)` },
+    { id: 'push-10000', group: 'Pompes', name: '10 000 pompes', desc: 'Estimation d’après le programme actuel.', unlocked: f.pompes >= 10000, date: amountDate(f.reps, 10000), progress: `${fmtInt(f.pompes)} / ${fmtInt(10000)} (estimation)` },
+    { id: 'push-50000', group: 'Pompes', name: '50 000 pompes', desc: 'Estimation. Le programme actuel sert de base.', unlocked: f.pompes >= 50000, date: amountDate(f.reps, 50000), progress: `${fmtInt(f.pompes)} / ${fmtInt(50000)} (estimation)` },
+    { id: 'plank-10', group: 'Planche', name: 'Sentinelle', desc: '10 minutes de planche. Estimation.', unlocked: f.plank >= 10, date: amountDate(f.plankMin, 10), progress: `${qty(f.plank)} / 10 min (estimation)` },
+    { id: 'plank-60', group: 'Planche', name: 'Colonne d’acier', desc: '60 minutes de planche. Estimation.', unlocked: f.plank >= 60, date: amountDate(f.plankMin, 60), progress: `${qty(f.plank)} / 60 min (estimation)` },
+    { id: 'plank-300', group: 'Planche', name: 'Mur du Kremlin', desc: '300 minutes de planche. Estimation.', unlocked: f.plank >= 300, date: amountDate(f.plankMin, 300), progress: `${qty(f.plank)} / 300 min (estimation)` },
+    { id: 'plank-1000', group: 'Planche', name: 'Fondation d’acier', desc: '1 000 minutes de planche. Estimation.', unlocked: f.plank >= 1000, date: amountDate(f.plankMin, 1000), progress: `${qty(f.plank)} / ${fmtInt(1000)} min (estimation)` },
+    { id: 'hang-10', group: 'Suspension', name: 'Première prise', desc: '10 minutes de suspension. Estimation.', unlocked: f.hang >= 10, date: amountDate(f.hangMin, 10), progress: `${qty(f.hang)} / 10 min (estimation)` },
+    { id: 'hang-60', group: 'Suspension', name: 'Barre d’acier', desc: '60 minutes de suspension. Estimation.', unlocked: f.hang >= 60, date: amountDate(f.hangMin, 60), progress: `${qty(f.hang)} / 60 min (estimation)` },
+    { id: 'hang-300', group: 'Suspension', name: 'Vigie rouge', desc: '300 minutes de suspension. Estimation.', unlocked: f.hang >= 300, date: amountDate(f.hangMin, 300), progress: `${qty(f.hang)} / 300 min (estimation)` },
+    { id: 'pull-100', group: 'Tractions', name: 'Cent tractions', desc: '100 tractions. Estimation.', unlocked: f.pulls >= 100, date: amountDate(f.pullsPer, 100), progress: `${fmtInt(f.pulls)} / 100 (estimation)` },
+    { id: 'pull-1000', group: 'Tractions', name: 'Millier de la barre', desc: '1 000 tractions. Estimation.', unlocked: f.pulls >= 1000, date: amountDate(f.pullsPer, 1000), progress: `${fmtInt(f.pulls)} / ${fmtInt(1000)} (estimation)` },
+    { id: 'pull-5000', group: 'Tractions', name: 'Légende de la barre', desc: '5 000 tractions. Estimation.', unlocked: f.pulls >= 5000, date: amountDate(f.pullsPer, 5000), progress: `${fmtInt(f.pulls)} / ${fmtInt(5000)} (estimation)` }
   ];
   return defs;
 }
@@ -757,7 +834,8 @@ function viewTrophees() {
   const items = trophyBoard();
   const got = items.filter((t) => t.unlocked).length;
   let h = `<h2 class="screen-title">Trophées</h2>
-  <p class="trophy-score">${got} / ${items.length}</p>`;
+  <p class="trophy-score">${got} / ${items.length}</p>
+  <p class="muted small trophy-since">Comptés depuis le 19 octobre 2026</p>`;
   let group = '';
   for (const t of items) {
     if (t.group !== group) {
@@ -774,7 +852,7 @@ function viewTrophees() {
     </article>`;
   }
   if (group) h += `</div>`;
-  h += `<p class="muted small" style="text-align:center">Calculé à partir des jours cochés, des bonus et des séances. Les pompes sont une estimation.</p>`;
+  h += `<p class="muted small" style="text-align:center">Depuis le 19 octobre 2026. Les jours d’avant restent dans Semaine, Mois et Calories. Planche, suspension, tractions et pompes sont une estimation.</p>`;
   return h;
 }
 
