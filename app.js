@@ -91,7 +91,7 @@ function exKcal(ex, weight) {
 }
 
 /* ---------- Données ---------- */
-const TROPHY_EPOCH = '2026-10-19';
+const TROPHY_EPOCH = '2026-10-18';
 let state = load();
 let ui = { weekOffset: 0, calMode: 'week', monthCursor: null };
 
@@ -835,7 +835,7 @@ function viewTrophees() {
   const got = items.filter((t) => t.unlocked).length;
   let h = `<h2 class="screen-title">Trophées</h2>
   <p class="trophy-score">${got} / ${items.length}</p>
-  <p class="muted small trophy-since">Comptés depuis le 19 octobre 2026</p>`;
+  <p class="muted small trophy-since">Comptés depuis le 18 octobre 2026</p>`;
   let group = '';
   for (const t of items) {
     if (t.group !== group) {
@@ -852,7 +852,7 @@ function viewTrophees() {
     </article>`;
   }
   if (group) h += `</div>`;
-  h += `<p class="muted small" style="text-align:center">Depuis le 19 octobre 2026. Les jours d’avant restent dans Semaine, Mois et Calories. Planche, suspension, tractions et pompes sont une estimation.</p>`;
+  h += `<p class="muted small" style="text-align:center">Depuis le 18 octobre 2026. Les jours d’avant restent dans Semaine, Mois et Calories. Planche, suspension, tractions et pompes sont une estimation.</p>`;
   return h;
 }
 
