@@ -1106,7 +1106,6 @@ function timerStart() {
   timerUnlockAudio();
   timerWake(true);
   timerPaint(true);
-  if (musicWith) musicPlay();
 }
 function timerPause() {
   if (timer.phase !== 'countdown' && timer.phase !== 'running') return;
@@ -1338,7 +1337,6 @@ function onTimerAction(el) {
 }
 function timerInit() {
   timer = loadTimer();
-  loadMusicPref();
   timerMount();
   musicBind();
   timerCatchUp();
@@ -1349,21 +1347,10 @@ function timerInit() {
 }
 /* =========================================================================
    Musique de séance
-   Préférence uniquement dans davaisuka.music.v1.
-   Le lecteur n’écrit rien dans les séances ni les trophées.
+   Lecteur indépendant du minuteur. N’écrit rien dans les séances ni les trophées.
    ========================================================================= */
-const MUSIC_KEY = 'davaisuka.music.v1';
-let musicWith = true;
 let musicEnded = false;
 
-function loadMusicPref() {
-  try {
-    const raw = localStorage.getItem(MUSIC_KEY);
-    if (!raw) return;
-    const d = JSON.parse(raw);
-    if (d && typeof d.withMusic === 'boolean') musicWith = d.withMusic;
-  } catch (e) {}
-}
 function musicState() {
   const a = document.getElementById('music-audio');
   if (!a || musicEnded) return 'idle';
@@ -1374,10 +1361,7 @@ function musicState() {
 function musicPanelHtml() {
   const st = musicState();
   return `<div class="music-box">
-    <div class="music-head">
-      <h3>Musique</h3>
-      <button type="button" class="music-toggle${musicWith ? ' on' : ''}" data-action="music-toggle" aria-pressed="${musicWith ? 'true' : 'false'}">Avec musique</button>
-    </div>
+    <h3>Musique</h3>
     <p class="music-hint">Deux morceaux enchaînés, hors ligne.</p>
     <div class="music-actions">
       <button type="button" class="btn music-go music-play${st === 'idle' ? '' : ' hidden'}" data-action="music-play">Musique</button>
@@ -1394,10 +1378,6 @@ function musicPaint() {
   hide('.music-pause', st !== 'playing');
   hide('.music-resume', st !== 'paused');
   hide('.music-stop', st === 'idle');
-  document.querySelectorAll('.music-toggle').forEach((el) => {
-    el.classList.toggle('on', musicWith);
-    el.setAttribute('aria-pressed', musicWith ? 'true' : 'false');
-  });
   const float = document.getElementById('music-float');
   if (!float) return;
   const show = st !== 'idle' && !timerScreenOn;
@@ -1434,12 +1414,6 @@ function musicStop() {
   try { a.currentTime = 0; } catch (e) {}
   musicPaint();
 }
-function musicToggle() {
-  musicWith = !musicWith;
-  try { localStorage.setItem(MUSIC_KEY, JSON.stringify({ withMusic: musicWith })); }
-  catch (e) {}
-  musicPaint();
-}
 function musicBind() {
   const a = document.getElementById('music-audio');
   if (!a || a.dataset.bound) return;
@@ -1453,7 +1427,6 @@ function onMusicAction(el) {
   if (action === 'music-play' || action === 'music-resume') musicPlay();
   else if (action === 'music-pause') musicPause();
   else if (action === 'music-stop') musicStop();
-  else if (action === 'music-toggle') musicToggle();
 }
 
 function timerOnVisible() {
@@ -1550,7 +1523,7 @@ document.addEventListener('click', (ev) => {
   const id = el.dataset.id;
   switch (el.dataset.action) {
     case 'close-trophies': dismissTrophyOverlay(); break;
-    case 'start': ensureToday().started = true; save(); render(); if (musicWith) musicPlay(); break;
+    case 'start': ensureToday().started = true; save(); render(); break;
     case 'toggle-ex': {
       const t = ensureToday();
       t.checked = t.checked.includes(id) ? t.checked.filter((x) => x !== id) : [...t.checked, id];
@@ -1561,7 +1534,7 @@ document.addEventListener('click', (ev) => {
       if (!mainSessionOn(todayKey())) return;
       const t = ensureToday();
       t.bonus = { started: true, checked: [] };
-      save(); render(); if (musicWith) musicPlay(); break;
+      save(); render(); break;
     }
     case 'toggle-bonus-ex': {
       const t = ensureToday();

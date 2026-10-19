@@ -499,18 +499,11 @@ body.timer-live #app {
   border-radius: 14px;
   padding: 12px;
 }
-.music-head { display: flex; align-items: center; gap: 10px; }
-.music-head h3 {
-  margin: 0; flex: 1;
+.music-box h3 {
+  margin: 0;
   font-family: "Russo One", sans-serif; font-weight: 400;
   font-size: 22px; color: #E10600;
 }
-.music-toggle {
-  min-height: 40px; padding: 0 12px; border-radius: 999px;
-  border: 1px solid #E10600; background: transparent; color: #E10600;
-  font-weight: 800; font-size: 13px;
-}
-.music-toggle.on { background: #E10600; color: #fff; }
 .music-hint { margin: 8px 0 10px; color: #8b96a8; font-size: 13px; }
 .music-actions { display: flex; flex-direction: column; gap: 8px; }
 .music-actions .btn { margin: 0; }
