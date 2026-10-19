@@ -99,7 +99,7 @@ function exKcal(ex, weight) {
 /* ---------- Données ---------- */
 const TROPHY_EPOCH = '2026-10-18';
 let state = load();
-let ui = { weekOffset: 0, calMode: 'week', monthCursor: null, fold: {} };
+let ui = { weekOffset: 0, calMode: 'week', monthCursor: null, fold: {}, timerOpen: false };
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function foldAttr(id) { return ui.fold[id] ? ' open' : ''; }
@@ -623,8 +623,7 @@ function viewHome() {
   <div class="stats" style="margin-top:16px">
     <div class="stat"><div class="v">${week.main}<span class="muted" style="font-size:18px"> / 7</span></div><div class="l">Cette semaine${week.bonus ? ` · ${esc(bonusNote(week.bonus))}` : ''}</div></div>
     <div class="stat"><div class="v o">${state.sessions.length}</div><div class="l">Séances au total</div></div>
-  </div>
-  ${homeTimerHtml()}`;
+  </div>`;
 
   if (done) {
     h += `<div class="done-banner">
@@ -652,7 +651,7 @@ function viewHome() {
     } else {
       h += `<button class="btn orange" data-action="start-bonus">Séance bonus</button>`;
     }
-    h += `${musicPanelHtml()}<button class="btn ghost" data-action="undo-session">Annuler la séance du jour</button>`;
+    h += `${musicPanelHtml(true)}<button class="btn ghost" data-action="undo-session">Annuler la séance du jour</button>`;
     return h;
   }
 
@@ -660,7 +659,7 @@ function viewHome() {
     h += `<div class="card">
       <h3>Séance du jour</h3>
       <button class="btn primary" data-action="start">▶ Commencer la séance du jour</button>
-      ${musicPanelHtml()}
+      ${musicPanelHtml(true)}
     </div>`;
     return h;
   }
@@ -674,7 +673,7 @@ function viewHome() {
     <div class="progress"><div style="width:${pct}%"></div></div>
     ${exerciseChecklist(t.checked, 'toggle-ex')}
   </div>
-  ${musicPanelHtml()}
+  ${musicPanelHtml(true)}
   <button class="btn primary" data-action="finish">🏁 Séance terminée</button>`;
   return h;
 }
@@ -686,7 +685,6 @@ function exerciseChecklist(checked, action) {
     html += `<li class="ex-item ${on ? 'done' : ''}" data-action="${action}" data-id="${e.id}" role="checkbox" aria-checked="${on}" tabindex="0">
       <span class="check">✓</span>
       <div class="ex-copy"><div class="ex-name">${esc(e.name)}</div>${e.note ? `<div class="ex-meta">${esc(e.note)}</div>` : ''}</div>
-      ${timerExButton(e)}
       <span class="ex-val">${esc(fmtVal(e))}</span>
     </li>`;
   }
@@ -1249,18 +1247,6 @@ function saveTimer() {
   try { localStorage.setItem(TIMER_KEY, JSON.stringify(timer)); }
   catch (e) { /* le minuteur reste utilisable même si le stockage refuse */ }
 }
-function timerKindFor(ex) {
-  if (!ex || ex.kind === 'pause') return null;
-  const n = normalize(ex.name);
-  if (n.includes('planche') || n.includes('plank') || n.includes('gainage')) return 'planche';
-  if (n.includes('hanging') || n.includes('suspension') || n.includes('barre')) return 'hanging';
-  return null;
-}
-function timerExButton(ex) {
-  const kind = timerKindFor(ex);
-  if (!kind) return '';
-  return `<button type="button" class="timer-ex" data-action="timer-pick" data-kind="${kind}" aria-label="Minuteur ${TIMER_LABEL[kind]}">⏱</button>`;
-}
 function timerBusy() {
   return timer.phase === 'countdown' || timer.phase === 'running' || timer.phase === 'paused';
 }
@@ -1445,25 +1431,44 @@ function timerCommitDuration() {
   saveTimer();
   timerPaint(true);
 }
-function homeTimerHtml() {
-  return `<div class="home-timer" id="home-timer">
-    <div class="home-timer-top">
-      <div class="timer-picks">
-        <button type="button" id="timer-pick-planche" data-action="timer-pick" data-kind="planche">Planche</button>
-        <button type="button" id="timer-pick-hanging" data-action="timer-pick" data-kind="hanging">Hanging</button>
-      </div>
-      <div id="timer-clock" class="home-timer-clock" aria-live="polite">2:00</div>
+function timerToggleText() {
+  const chev = ui.timerOpen ? '▴' : '▾';
+  if (!timer || timer.phase === 'idle') {
+    const kind = timer ? (TIMER_LABEL[timer.selected] || 'Planche') : 'Planche';
+    const sec = timer ? (timer.durations[timer.selected] || 0) : 120;
+    return '⏱ ' + kind + ' ' + formatTimer(sec * 1000) + ' ' + chev;
+  }
+  if (timer.phase === 'done') return '⏱ 0:00 ' + chev;
+  return '⏱ ' + timerScreenClock() + ' ' + chev;
+}
+function timerSlotHtml() {
+  return `<div class="timer-slot">
+    <button type="button" id="timer-toggle" class="btn music-go timer-toggle" data-action="timer-toggle" aria-expanded="${ui.timerOpen ? 'true' : 'false'}">${timerToggleText()}</button>
+    <button type="button" id="timer-pause-row" class="btn music-go timer-row-act hidden" data-action="timer-pause">Pause</button>
+    <button type="button" id="timer-resume-row" class="btn music-go timer-row-act hidden" data-action="timer-resume">Reprendre</button>
+  </div>`;
+}
+function timerAccordionHtml() {
+  return `<div id="timer-acc" class="timer-acc${ui.timerOpen ? '' : ' hidden'}">
+    <div class="timer-acc-bar">
+      <span class="timer-acc-title">Minuteur</span>
+      <button type="button" class="timer-acc-close" data-action="timer-toggle" aria-label="Replier le minuteur">▴</button>
     </div>
-    <p id="timer-phrase" class="home-timer-status hidden" aria-live="polite"></p>
-    <p id="timer-done" class="home-timer-status hidden" aria-live="polite">${TIMER_DONE_TEXT}</p>
-    <div class="home-timer-actions">
-      <div id="timer-dur">
+    <div class="timer-picks">
+      <button type="button" id="timer-pick-planche" data-action="timer-pick" data-kind="planche">Planche</button>
+      <button type="button" id="timer-pick-hanging" data-action="timer-pick" data-kind="hanging">Hanging</button>
+    </div>
+    <div id="timer-clock" class="timer-acc-clock" aria-live="polite">2:00</div>
+    <p id="timer-phrase" class="timer-acc-status hidden" aria-live="polite"></p>
+    <p id="timer-done" class="timer-acc-status hidden" aria-live="polite">${TIMER_DONE_TEXT}</p>
+    <div class="timer-acc-actions">
+      <div id="timer-dur" class="timer-acc-steps">
         <button type="button" data-action="timer-step" data-d="-15" aria-label="Retirer 15 secondes">−15 s</button>
         <button type="button" data-action="timer-step" data-d="15" aria-label="Ajouter 15 secondes">+15 s</button>
       </div>
-      <button type="button" id="timer-start" data-action="timer-start">Démarrer</button>
-      <button type="button" id="timer-pause" data-action="timer-pause">Pause</button>
-      <button type="button" id="timer-resume" data-action="timer-resume">Reprendre</button>
+      <button type="button" id="timer-start" class="timer-go" data-action="timer-start">Démarrer</button>
+      <button type="button" id="timer-pause" class="timer-go" data-action="timer-pause">Pause</button>
+      <button type="button" id="timer-resume" class="timer-go" data-action="timer-resume">Reprendre</button>
       <button type="button" id="timer-reset" data-action="timer-reset">Réinitialiser</button>
     </div>
   </div>`;
@@ -1511,6 +1516,13 @@ function timerPaint(full) {
     clock.textContent = timerScreenClock();
     clock.classList.toggle('countdown', timer.phase === 'countdown');
   }
+  const toggle = document.getElementById('timer-toggle');
+  if (toggle) {
+    toggle.textContent = timerToggleText();
+    toggle.setAttribute('aria-expanded', ui.timerOpen ? 'true' : 'false');
+  }
+  const acc = document.getElementById('timer-acc');
+  if (acc) acc.classList.toggle('hidden', !ui.timerOpen);
   const phrase = document.getElementById('timer-phrase');
   if (phrase) {
     const show = timer.phase === 'countdown';
@@ -1556,11 +1568,17 @@ function timerPaint(full) {
   show('timer-pause', timer.phase === 'countdown' || timer.phase === 'running');
   show('timer-resume', timer.phase === 'paused');
   show('timer-reset', timer.phase !== 'idle');
+  const collapsed = !ui.timerOpen;
+  const rowPause = document.getElementById('timer-pause-row');
+  const rowResume = document.getElementById('timer-resume-row');
+  if (rowPause) rowPause.classList.toggle('hidden', !(collapsed && (timer.phase === 'countdown' || timer.phase === 'running')));
+  if (rowResume) rowResume.classList.toggle('hidden', !(collapsed && timer.phase === 'paused'));
   musicPaint();
 }
 function onTimerAction(el) {
   const action = el.dataset.action;
-  if (action === 'timer-pick') timerPick(el.dataset.kind);
+  if (action === 'timer-toggle') { ui.timerOpen = !ui.timerOpen; timerPaint(true); }
+  else if (action === 'timer-pick') timerPick(el.dataset.kind);
   else if (action === 'timer-step') timerStep(Number(el.dataset.d) || 0);
   else if (action === 'timer-start') timerStart();
   else if (action === 'timer-pause') timerPause();
@@ -1590,9 +1608,9 @@ function musicState() {
   if (a.currentTime > 0.2) return 'paused';
   return 'idle';
 }
-function musicPanelHtml() {
+function musicPanelHtml(withTimer) {
   const st = musicState();
-  return `<div class="music-box">
+  return `<div class="music-box${withTimer ? ' with-timer' : ''}">
     <h3>Musique</h3>
     <p class="music-hint">Zek47 - Training Songs</p>
     <div class="music-actions">
@@ -1600,7 +1618,9 @@ function musicPanelHtml() {
       <button type="button" class="btn music-go music-pause${st === 'playing' ? '' : ' hidden'}" data-action="music-pause">Pause</button>
       <button type="button" class="btn music-go music-resume${st === 'paused' ? '' : ' hidden'}" data-action="music-resume">Reprendre</button>
       <button type="button" class="btn music-stop-btn music-stop${st === 'idle' ? ' hidden' : ''}" data-action="music-stop">Arrêter</button>
+      ${withTimer ? timerSlotHtml() : ''}
     </div>
+    ${withTimer ? timerAccordionHtml() : ''}
   </div>`;
 }
 function musicPaint() {

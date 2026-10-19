@@ -527,55 +527,45 @@ textarea { min-height: 70px; resize: vertical; }
 /* --- Minuteur --- */
 .ex-item .ex-copy { flex: 1; min-width: 0; }
 .ex-item .ex-name { word-wrap: break-word; }
-.timer-ex {
-  width: 44px; height: 44px; min-width: 44px; border-radius: 12px;
-  border: 1px solid #E10600; background: #080404; color: #E10600;
-  font-size: 18px; display: inline-flex; align-items: center; justify-content: center;
+.timer-acc {
+  margin-top: 10px; padding-top: 8px;
+  border-top: 1px solid rgba(225, 6, 0, .35);
+  display: flex; flex-direction: column; gap: 8px;
 }
-.home-timer {
-  position: fixed; z-index: 30; left: 50%; transform: translateX(-50%);
-  width: min(544px, calc(100% - 16px));
-  bottom: calc(var(--tabbar-h) + var(--safe-b) + 6px);
-  height: 102px; box-sizing: border-box; overflow: hidden;
-  display: flex; flex-direction: column; justify-content: center; gap: 4px;
-  padding: 6px 8px; border-radius: 14px;
-  background: #080404; color: #f2f5f8; border: 1px solid #E10600;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+.timer-acc-bar { display: flex; align-items: center; justify-content: space-between; min-height: 28px; }
+.timer-acc-title {
+  font-family: "Russo One", sans-serif; font-size: 14px; color: #E10600; letter-spacing: 0.04em;
 }
-.home-timer-top { display: flex; align-items: center; gap: 8px; min-height: 36px; }
-.home-timer .timer-picks { flex: 1; gap: 6px; }
-.home-timer .timer-picks button {
-  min-height: 32px; border-radius: 8px; font-size: 13px; padding: 0 4px;
+.timer-acc-close {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 1px solid #E10600; background: transparent; color: #E10600;
+  font-size: 16px; line-height: 1;
 }
-.home-timer-clock {
-  min-width: 72px; text-align: right;
-  font-family: "Russo One", sans-serif; font-size: 28px; line-height: 1; color: #E10600;
+.timer-acc .timer-picks button { min-height: 40px; font-size: 15px; }
+.timer-acc-clock {
+  text-align: center;
+  font-family: "Russo One", sans-serif; font-weight: 400;
+  font-size: 56px; line-height: 1; color: #E10600;
   font-variant-numeric: tabular-nums;
 }
-.home-timer-status {
-  margin: 0; height: 14px; overflow: hidden; white-space: nowrap;
-  text-align: center; font-size: 11px; line-height: 14px; color: #E10600;
-  font-family: "Russo One", sans-serif;
+.timer-acc-clock.countdown { font-size: 64px; }
+.timer-acc-status {
+  margin: 0; text-align: center;
+  font-family: "Russo One", sans-serif; font-size: 16px; line-height: 1.2; color: #E10600;
 }
-.home-timer-actions { display: flex; align-items: center; gap: 6px; }
-.home-timer-actions #timer-dur { display: flex; gap: 6px; }
-.home-timer-actions button {
-  min-height: 32px; padding: 0 8px; border-radius: 8px;
+.timer-acc-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.timer-acc-steps button,
+.timer-acc-actions > button {
+  min-height: 44px; border-radius: 12px;
   border: 1px solid #5a1814; background: #140808; color: #f2f5f8;
-  font-size: 12px; font-weight: 800;
+  font-weight: 800; font-size: 15px;
 }
-.home-timer-actions #timer-start,
-.home-timer-actions #timer-pause,
-.home-timer-actions #timer-resume {
-  flex: 1; background: #E10600; border-color: #E10600; color: #fff;
+.timer-acc-steps button:disabled { opacity: .4; }
+.timer-acc-actions { display: flex; flex-direction: column; gap: 8px; }
+.timer-acc-actions > button.timer-go {
+  background: #E10600; border-color: #E10600; color: #fff;
   font-family: "Russo One", sans-serif; font-weight: 400;
 }
-.home-timer-actions button:disabled { opacity: .4; }
-html:has(body.home),
-body.home { scroll-padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 116px); }
-body.home #app { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 130px); }
-body.home .music-float { bottom: calc(var(--tabbar-h) + var(--safe-b) + 116px); }
-body.home.music-live #app { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 188px); }
 .timer-fab {
   position: fixed; z-index: 45; right: 14px;
   bottom: calc(var(--tabbar-h) + var(--safe-b) + 12px);
@@ -701,6 +691,28 @@ body.timer-live #app {
 .music-hint { margin: 8px 0 10px; color: #8b96a8; font-size: 13px; }
 .music-actions { display: flex; flex-direction: column; gap: 8px; }
 .music-actions .btn { margin: 0; }
+.music-box.with-timer .music-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+.music-box.with-timer .music-actions .btn {
+  min-width: 0;
+  padding: 10px 6px;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.music-box.with-timer .music-play,
+.music-box.with-timer .music-pause,
+.music-box.with-timer .music-resume { grid-column: 1; grid-row: 1; }
+.music-box.with-timer .music-stop { grid-column: 1; grid-row: 2; }
+.timer-slot {
+  grid-column: 2; grid-row: 1;
+  display: flex; gap: 6px; min-width: 0;
+}
+.timer-slot .btn { width: auto; margin: 0; }
+.timer-toggle { flex: 1 1 auto; white-space: nowrap; }
+.timer-row-act { flex: 0 0 auto; padding-left: 8px; padding-right: 8px; }
 .music-box .music-go {
   background: #E10600; color: #fff;
   font-family: "Russo One", sans-serif; letter-spacing: 0.03em;
