@@ -249,18 +249,23 @@ function monthParts(y, m) {
   return { main, bonus, total: main + bonus };
 }
 const WEEK_MOTIVATION = {
+  14: 'Légendaire',
+  13: 'Héroïque',
+  12: 'Exceptionnel',
+  11: 'Remarquable',
+  10: 'Impressionnant',
   9: 'Au-dessus des attentes',
-  8: 'Good shit',
-  7: 'Bien',
+  8: 'Solide',
+  7: 'Devoir accompli',
   6: 'Insuffisant',
-  5: 'Bare minimum',
-  4: 'Décevant',
+  5: 'Décevant',
+  4: 'Médiocre',
   3: 'Minable',
   2: 'Inacceptable',
-  1: 'Autant pas le faire'
+  1: 'Honteux'
 };
 function weekMotivation(n) {
-  if (n >= 10) return 'Impressionnant';
+  if (n > 14) n = 14;
   if (WEEK_MOTIVATION[n]) return WEEK_MOTIVATION[n];
   return 'Aucun jour coché pour l’instant.';
 }
