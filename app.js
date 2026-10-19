@@ -20,13 +20,13 @@ const DEFAULT_WEIGHT = 72.6; // kg (≈ 160 lb), modifiable dans Calories → R�
 const KG_PER_LB = 0.45359237;
 
 const DEFAULT_PROGRAM = [
-  { kind: 'ex', name: 'Push-ups courts', type: 'reps', value: 25, note: '' },
+  { kind: 'ex', name: 'Pompes Classiques', type: 'reps', value: 25, note: '' },
   { kind: 'ex', name: 'Planche statique', type: 'time', value: 60, note: '' },
   { kind: 'ex', name: 'Planche avec rotation du bassin gauche-droite', type: 'time', value: 60, note: '' },
   { kind: 'ex', name: 'Mountain climbers jambe droite', type: 'reps', value: 15, note: '' },
   { kind: 'ex', name: 'Mountain climbers jambe gauche', type: 'reps', value: 15, note: '' },
   { kind: 'pause' },
-  { kind: 'ex', name: 'Push-ups courts', type: 'reps', value: 20, note: '' },
+  { kind: 'ex', name: 'Pompes Classiques', type: 'reps', value: 20, note: '' },
   { kind: 'ex', name: 'Push-ups longs', type: 'reps', value: 5, note: 'Le dernier très lent' },
   { kind: 'ex', name: 'Hanging', type: 'time', value: 60, note: 'Avec 10 pull-ups minimum' }
 ];
@@ -34,15 +34,23 @@ const DEFAULT_PROGRAM = [
 // Noms par défaut d'avant le nettoyage. Une seule passe au chargement :
 // on retire le « (… ) » final, sans toucher au reste du programme ni aux séances.
 const LEGACY_PAREN_NAMES = {
-  'Push-ups courts (pectoraux)': 'Push-ups courts',
+  'Push-ups courts (pectoraux)': 'Pompes Classiques',
   'Push-ups longs (plus difficiles)': 'Push-ups longs'
 };
+const LEGACY_POMPES_NAME = 'Push-ups courts';
 
 function migrateSavedNames(program) {
   return program.map((e) => {
     const cleaned = e && e.kind === 'ex' ? LEGACY_PAREN_NAMES[e.name] : undefined;
     return cleaned ? { ...e, name: cleaned } : e;
   });
+}
+function renamePompesClassiques(program) {
+  if (!Array.isArray(program)) return program;
+  for (const e of program) {
+    if (e && e.kind === 'ex' && e.name === LEGACY_POMPES_NAME) e.name = 'Pompes Classiques';
+  }
+  return program;
 }
 
 const MOTTOS = [
@@ -115,7 +123,7 @@ function load() {
       const days = d.days && typeof d.days === 'object' && !Array.isArray(d.days) ? d.days : {};
       return {
         ...d,
-        program: d.parenNamesMigrated ? program : migrateSavedNames(program),
+        program: renamePompesClassiques(d.parenNamesMigrated ? program : migrateSavedNames(program)),
         weight: d.weightSet && Number(d.weight) > 0 ? Number(d.weight) : DEFAULT_WEIGHT,
         weightSet: !!d.weightSet,
         weightUnit: d.weightUnit === 'lb' ? 'lb' : 'kg',
