@@ -619,7 +619,7 @@ function viewHome() {
     <span class="date-pill">📅 ${esc(fmtLong(now))}</span>
   </section>
   <div class="stats" style="margin-top:16px">
-    <div class="stat"><div class="v">${week.total}<span class="muted" style="font-size:18px"> / 7</span></div><div class="l">Cette semaine${week.bonus ? ` · ${esc(bonusNote(week.bonus))}` : ''}</div></div>
+    <div class="stat"><div class="v">${week.main}<span class="muted" style="font-size:18px"> / 7</span></div><div class="l">Cette semaine${week.bonus ? ` · ${esc(bonusNote(week.bonus))}` : ''}</div></div>
     <div class="stat"><div class="v o">${state.sessions.length}</div><div class="l">Séances au total</div></div>
   </div>`;
 
@@ -707,7 +707,8 @@ function viewWeekGrid() {
   const off = ui.weekOffset;
   const title = off === 0 ? 'Cette semaine' : off === -1 ? 'Semaine dernière' : `Il y a ${-off} semaines`;
   const parts = weekParts(monday);
-  const n = parts.total;
+  const n = parts.main;
+  const scored = parts.total;
   let h = `<div class="week-nav">
     <button class="icon-btn" data-action="week-prev" aria-label="Semaine précédente">‹</button>
     <div class="lbl">${title}<div class="muted small">${esc(fmtShort(monday))} – ${esc(fmtShort(sunday))}</div></div>
@@ -732,7 +733,7 @@ function viewWeekGrid() {
   <div class="week-total"><div class="n" id="week-total">${n}<span> / 7</span></div>
   ${parts.bonus ? `<div class="bonus-note" id="bonus-note">${esc(bonusNote(parts.bonus))}</div>` : ''}
   <div class="dots">${Array.from({ length: 7 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div>
-  <div class="muted" id="week-motivation" style="margin-top:10px">${esc(weekMotivation(n))}</div></div>
+  <div class="muted" id="week-motivation" style="margin-top:10px">${esc(weekMotivation(scored))}</div></div>
   </div>
   <div class="cal-legends">
     <p class="cal-legend"><span class="check on sym" aria-hidden="true">✓</span><span>= séance complétée précédemment</span></p>
@@ -749,14 +750,15 @@ function viewMonth() {
   const pad = (first.getDay() + 6) % 7;
   const dim = new Date(y, m + 1, 0).getDate();
   const parts = monthParts(y, m);
-  const checked = parts.total;
+  const checked = parts.main;
+  const unit = `jour${checked > 1 ? 's' : ''}`;
   const atMin = monthIndex(y, m) <= monthIndex(EARLIEST_MONTH.y, EARLIEST_MONTH.m);
   const atMax = monthIndex(y, m) >= monthIndex(now.getFullYear(), now.getMonth());
   const years = [];
   for (let yy = EARLIEST_MONTH.y; yy <= now.getFullYear(); yy++) years.push(yy);
   let h = `<div class="week-nav">
     <button class="icon-btn" data-action="month-prev" aria-label="Mois précédent" ${atMin ? 'disabled' : ''}>‹</button>
-    <div class="lbl">${esc(capMonth(m))} ${y}<div class="muted small">${checked} séance${checked > 1 ? 's' : ''}${parts.bonus ? ` · ${esc(bonusNote(parts.bonus))}` : ''}</div></div>
+    <div class="lbl">${esc(capMonth(m))} ${y}<div class="muted small">${checked} ${unit}${parts.bonus ? ` · ${esc(bonusNote(parts.bonus))}` : ''}</div></div>
     <button class="icon-btn" data-action="month-next" aria-label="Mois suivant" ${atMax ? 'disabled' : ''}>›</button>
   </div>
   <div class="month-jump">
@@ -778,11 +780,10 @@ function viewMonth() {
     </div>`;
   }
   h += `</div>
-  <div class="week-total"><div class="n" id="month-total">${checked}<span> séance${checked > 1 ? 's' : ''}</span></div>
+  <div class="week-total"><div class="n" id="month-total">${checked}<span> ${unit}</span></div>
   ${parts.bonus ? `<div class="bonus-note">${esc(bonusNote(parts.bonus))}</div>` : ''}
-  <div class="muted" style="margin-top:8px">Présences du mois, bonus compris. Un jour coché compte dans les totaux, sans calories.</div></div>
-  </div>
-  <p class="cal-legend">Les jours à venir sont verrouillés.</p>`;
+  <div class="muted" style="margin-top:8px">Présences du mois.</div></div>
+  </div>`;
   return h;
 }
 
