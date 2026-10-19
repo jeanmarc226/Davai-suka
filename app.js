@@ -90,7 +90,7 @@ function exKcal(ex, weight) {
 
 /* ---------- Données ---------- */
 let state = load();
-let ui = { weekOffset: 0 };
+let ui = { weekOffset: 0, calMode: 'week', monthCursor: null };
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function freshProgram() { return DEFAULT_PROGRAM.map((e) => ({ ...e, id: uid() })); }
@@ -135,6 +135,34 @@ function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); retu
 const fmtLong = (d) => { const t = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); return t.charAt(0).toUpperCase() + t.slice(1); };
 const fmtShort = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 const fmtDM = (d) => String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+const MONTH_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const EARLIEST_MONTH = { y: 2025, m: 9 }; // octobre 2025
+const monthIndex = (y, m) => y * 12 + m;
+function capMonth(m) { const s = MONTH_FR[m]; return s.charAt(0).toUpperCase() + s.slice(1); }
+function ensureMonthCursor() {
+  if (!ui.monthCursor) {
+    const n = new Date();
+    ui.monthCursor = { y: n.getFullYear(), m: n.getMonth() };
+  }
+  return ui.monthCursor;
+}
+function clampMonth(y, m) {
+  const now = new Date();
+  let idx = monthIndex(y, m);
+  const min = monthIndex(EARLIEST_MONTH.y, EARLIEST_MONTH.m);
+  const max = monthIndex(now.getFullYear(), now.getMonth());
+  if (idx < min) return { y: EARLIEST_MONTH.y, m: EARLIEST_MONTH.m };
+  if (idx > max) return { y: now.getFullYear(), m: now.getMonth() };
+  return { y, m };
+}
+function monthsInYear(y) {
+  const now = new Date();
+  let start = y === EARLIEST_MONTH.y ? EARLIEST_MONTH.m : 0;
+  let end = y === now.getFullYear() ? now.getMonth() : 11;
+  const out = [];
+  for (let m = start; m <= end; m++) out.push(m);
+  return out;
+}
 
 /* ---------- Utilitaires ---------- */
 function esc(s) {
@@ -253,14 +281,22 @@ function viewHome() {
 
 /* ----- 2. Semaine ----- */
 function viewWeek() {
+  const mode = ui.calMode === 'month' ? 'month' : 'week';
+  let h = `<h2 class="screen-title">Semaine</h2>
+  <div class="seg cal-toggle" role="group" aria-label="Affichage du calendrier">
+    <button type="button" data-action="cal-mode" data-mode="week" class="${mode === 'week' ? 'on' : ''}" aria-pressed="${mode === 'week'}">Semaine</button>
+    <button type="button" data-action="cal-mode" data-mode="month" class="${mode === 'month' ? 'on' : ''}" aria-pressed="${mode === 'month'}">Mois</button>
+  </div>`;
+  return h + (mode === 'month' ? viewMonth() : viewWeekGrid());
+}
+function viewWeekGrid() {
   const monday = addDays(mondayOf(new Date()), ui.weekOffset * 7);
   const sunday = addDays(monday, 6);
   const tk = todayKey();
   const off = ui.weekOffset;
   const title = off === 0 ? 'Cette semaine' : off === -1 ? 'Semaine dernière' : `Il y a ${-off} semaines`;
   const n = weekCount(monday);
-  let h = `<h2 class="screen-title">Semaine</h2>
-  <div class="week-nav">
+  let h = `<div class="week-nav">
     <button class="icon-btn" data-action="week-prev" aria-label="Semaine précédente">‹</button>
     <div class="lbl">${title}<div class="muted small">${esc(fmtShort(monday))} – ${esc(fmtShort(sunday))}</div></div>
     <button class="icon-btn" data-action="week-next" aria-label="Semaine suivante" ${off >= 0 ? 'disabled' : ''}>›</button>
@@ -281,6 +317,46 @@ function viewWeek() {
   <div class="muted" style="margin-top:10px">${n === 7 ? 'Semaine parfaite ! 🏆' : n >= 4 ? 'Belle régularité, continue ! 💪' : n > 0 ? 'C’est parti, garde le rythme !' : 'Aucun jour coché pour l’instant.'}</div></div>
   </div>
   <p class="muted small" style="text-align:center">Touchez un jour pour le cocher / décocher. 🔥 = séance enregistrée ce jour-là.</p>`;
+  return h;
+}
+function viewMonth() {
+  const c = ensureMonthCursor();
+  const y = c.y, m = c.m;
+  const tk = todayKey();
+  const now = new Date();
+  const first = new Date(y, m, 1);
+  const pad = (first.getDay() + 6) % 7;
+  const dim = new Date(y, m + 1, 0).getDate();
+  let checked = 0;
+  for (let d = 1; d <= dim; d++) if (isDayChecked(dkey(new Date(y, m, d)))) checked++;
+  const atMin = monthIndex(y, m) <= monthIndex(EARLIEST_MONTH.y, EARLIEST_MONTH.m);
+  const atMax = monthIndex(y, m) >= monthIndex(now.getFullYear(), now.getMonth());
+  const years = [];
+  for (let yy = EARLIEST_MONTH.y; yy <= now.getFullYear(); yy++) years.push(yy);
+  let h = `<div class="week-nav">
+    <button class="icon-btn" data-action="month-prev" aria-label="Mois précédent" ${atMin ? 'disabled' : ''}>‹</button>
+    <div class="lbl">${esc(capMonth(m))} ${y}<div class="muted small">${checked} jour${checked > 1 ? 's' : ''}</div></div>
+    <button class="icon-btn" data-action="month-next" aria-label="Mois suivant" ${atMax ? 'disabled' : ''}>›</button>
+  </div>
+  <div class="month-jump">
+    <select id="jump-month" aria-label="Choisir le mois">${monthsInYear(y).map((mm) => `<option value="${mm}" ${mm === m ? 'selected' : ''}>${esc(capMonth(mm))}</option>`).join('')}</select>
+    <select id="jump-year" aria-label="Choisir l'année">${years.map((yy) => `<option value="${yy}" ${yy === y ? 'selected' : ''}>${yy}</option>`).join('')}</select>
+  </div>
+  <div class="card">
+  <div class="cal-head">${DAY_SHORT.map((dn) => `<span>${dn}</span>`).join('')}</div>
+  <div class="cal" role="grid" aria-label="Calendrier ${esc(capMonth(m))} ${y}">`;
+  for (let i = 0; i < pad; i++) h += `<span class="cal-empty"></span>`;
+  for (let d = 1; d <= dim; d++) {
+    const k = dkey(new Date(y, m, d));
+    const on = isDayChecked(k);
+    const future = k > tk;
+    h += `<button type="button" class="cal-day${on ? ' on' : ''}${k === tk ? ' today' : ''}" data-action="toggle-day" data-date="${k}" ${future ? 'disabled' : ''} aria-pressed="${on}" aria-label="${d} ${esc(MONTH_FR[m])} ${y}${on ? ', coché' : ''}">${d}${on ? '<span class="mark" aria-hidden="true">✓</span>' : ''}</button>`;
+  }
+  h += `</div>
+  <div class="week-total"><div class="n">${checked}<span> jour${checked > 1 ? 's' : ''}</span></div>
+  <div class="muted" style="margin-top:8px">Présences du mois. Un jour coché compte dans les totaux, sans calories.</div></div>
+  </div>
+  <p class="muted small" style="text-align:center">Touchez un jour passé pour le cocher. Les jours à venir sont verrouillés.</p>`;
   return h;
 }
 
@@ -548,7 +624,24 @@ document.addEventListener('click', (ev) => {
     }
     case 'week-prev': ui.weekOffset--; render(); break;
     case 'week-next': if (ui.weekOffset < 0) ui.weekOffset++; render(); break;
-    case 'toggle-day': { const k = el.dataset.date; state.days[k] = !isDayChecked(k); save(); render(); break; }
+    case 'cal-mode': ui.calMode = el.dataset.mode === 'month' ? 'month' : 'week'; render(); break;
+    case 'month-prev':
+    case 'month-next': {
+      const c = ensureMonthCursor();
+      const dir = el.dataset.action === 'month-prev' ? -1 : 1;
+      const shifted = new Date(c.y, c.m + dir, 1);
+      ui.monthCursor = clampMonth(shifted.getFullYear(), shifted.getMonth());
+      render();
+      break;
+    }
+    case 'toggle-day': {
+      const k = el.dataset.date;
+      if (!k || k > todayKey()) return;
+      state.days[k] = !isDayChecked(k);
+      save();
+      render();
+      break;
+    }
     case 'up': moveItem(id, -1); break;
     case 'down': moveItem(id, 1); break;
     case 'edit': openEditor(id); break;
@@ -626,6 +719,13 @@ document.addEventListener('input', (ev) => {
 });
 document.addEventListener('change', (ev) => {
   if (ev.target.id === 'import-file' && ev.target.files[0]) importData(ev.target.files[0]);
+  if (ev.target.id === 'jump-month' || ev.target.id === 'jump-year') {
+    const y = Number(document.getElementById('jump-year').value);
+    const m = Number(document.getElementById('jump-month').value);
+    ui.monthCursor = clampMonth(y, m);
+    ui.calMode = 'month';
+    render();
+  }
 });
 window.addEventListener('hashchange', () => { closeSheet(); render(); });
 // Rafraîchir quand on revient sur l'appli (ex. passage à un nouveau jour)
