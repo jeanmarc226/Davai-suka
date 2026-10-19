@@ -12,16 +12,30 @@ const DEFAULT_WEIGHT = 72.6; // kg (≈ 160 lb), modifiable dans Programme → R
 const KG_PER_LB = 0.45359237;
 
 const DEFAULT_PROGRAM = [
-  { kind: 'ex', name: 'Push-ups courts (pectoraux)', type: 'reps', value: 25, note: '' },
+  { kind: 'ex', name: 'Push-ups courts', type: 'reps', value: 25, note: '' },
   { kind: 'ex', name: 'Planche statique', type: 'time', value: 60, note: '' },
   { kind: 'ex', name: 'Planche avec rotation du bassin gauche-droite', type: 'time', value: 60, note: '' },
   { kind: 'ex', name: 'Mountain climbers jambe droite', type: 'reps', value: 15, note: '' },
   { kind: 'ex', name: 'Mountain climbers jambe gauche', type: 'reps', value: 15, note: '' },
   { kind: 'pause' },
-  { kind: 'ex', name: 'Push-ups courts (pectoraux)', type: 'reps', value: 20, note: '' },
-  { kind: 'ex', name: 'Push-ups longs (plus difficiles)', type: 'reps', value: 5, note: 'Le dernier très lent' },
+  { kind: 'ex', name: 'Push-ups courts', type: 'reps', value: 20, note: '' },
+  { kind: 'ex', name: 'Push-ups longs', type: 'reps', value: 5, note: 'Le dernier très lent' },
   { kind: 'ex', name: 'Hanging', type: 'time', value: 60, note: 'Avec 10 pull-ups minimum' }
 ];
+
+// Noms par défaut d'avant le nettoyage. Une seule passe au chargement :
+// on retire le « (… ) » final, sans toucher au reste du programme ni aux séances.
+const LEGACY_PAREN_NAMES = {
+  'Push-ups courts (pectoraux)': 'Push-ups courts',
+  'Push-ups longs (plus difficiles)': 'Push-ups longs'
+};
+
+function migrateSavedNames(program) {
+  return program.map((e) => {
+    const cleaned = e && e.kind === 'ex' ? LEGACY_PAREN_NAMES[e.name] : undefined;
+    return cleaned ? { ...e, name: cleaned } : e;
+  });
+}
 
 const MOTTOS = [
   'Chaque répétition compte. 💪',
@@ -86,18 +100,20 @@ function load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const d = JSON.parse(raw);
+      const program = Array.isArray(d.program) ? d.program : freshProgram();
       return {
-        program: Array.isArray(d.program) ? d.program : freshProgram(),
+        program: d.parenNamesMigrated ? program : migrateSavedNames(program),
         weight: d.weightSet && Number(d.weight) > 0 ? Number(d.weight) : DEFAULT_WEIGHT,
         weightSet: !!d.weightSet,
         weightUnit: d.weightUnit === 'lb' ? 'lb' : 'kg',
         days: d.days && typeof d.days === 'object' ? d.days : {},
         sessions: Array.isArray(d.sessions) ? d.sessions : [],
-        today: d.today || null
+        today: d.today || null,
+        parenNamesMigrated: true
       };
     }
   } catch (e) { console.warn('Lecture des données impossible', e); }
-  return { program: freshProgram(), weight: DEFAULT_WEIGHT, weightSet: false, weightUnit: 'kg', days: {}, sessions: [], today: null };
+  return { program: freshProgram(), weight: DEFAULT_WEIGHT, weightSet: false, weightUnit: 'kg', days: {}, sessions: [], today: null, parenNamesMigrated: true };
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
