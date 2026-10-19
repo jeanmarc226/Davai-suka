@@ -462,6 +462,7 @@ textarea { min-height: 70px; resize: vertical; }
 .trophy-group { margin: 14px 4px 8px; font-size: 13px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
 .trophy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .trophy {
+  position: relative;
   background: var(--card); border: 1px solid var(--line); border-radius: 14px;
   padding: 12px 8px 10px; text-align: center;
 }
@@ -469,6 +470,19 @@ textarea { min-height: 70px; resize: vertical; }
 .trophy img { width: 72px; height: 72px; object-fit: contain; }
 .trophy img.off { filter: grayscale(1) brightness(.55); }
 .trophy img.on { filter: drop-shadow(0 0 10px rgba(225, 6, 0, .9)); }
+.trophy-count {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: #E10600;
+  color: #E3B23C;
+  font-family: "Russo One", sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
 .trophy-name { font-weight: 800; font-size: 14px; margin-top: 6px; }
 .trophy-desc { color: var(--muted); font-size: 12px; margin: 4px 0 0; line-height: 1.3; }
 .trophy-progress { font-weight: 800; font-size: 12px; margin-top: 8px; color: var(--accent); }

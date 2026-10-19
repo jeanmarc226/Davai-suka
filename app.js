@@ -127,7 +127,7 @@ function load() {
       };
     }
   } catch (e) { console.warn('Lecture des données impossible', e); }
-  return { program: freshProgram(), weight: DEFAULT_WEIGHT, weightSet: false, weightUnit: 'kg', days: {}, bonusDays: {}, sessions: [], today: null, seenTrophies: [], trophiesStartDate: TROPHY_EPOCH, trophiesEpochApplied: true, parenNamesMigrated: true };
+  return { program: freshProgram(), weight: DEFAULT_WEIGHT, weightSet: false, weightUnit: 'kg', days: {}, bonusDays: {}, sessions: [], today: null, seenTrophies: [], seenTrophyCounts: {}, trophiesStartDate: TROPHY_EPOCH, trophiesEpochApplied: true, parenNamesMigrated: true };
 }
 function trophyEpochFields(d) {
   const applied = d.trophiesEpochApplied === true;
@@ -137,8 +137,24 @@ function trophyEpochFields(d) {
   return {
     trophiesStartDate: start,
     seenTrophies: applied ? seenList(d.seenTrophies) : [],
+    seenTrophyCounts: seenCounts(d.seenTrophyCounts),
     trophiesEpochApplied: true
   };
+}
+function seenCounts(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const k of Object.keys(raw)) {
+    const n = Number(raw[k]);
+    if (Number.isInteger(n) && n > 0) out[k] = n;
+  }
+  return out;
+}
+function seenCountFor(id) {
+  const map = state && state.seenTrophyCounts;
+  if (map && Number.isInteger(map[id])) return map[id];
+  if (seenList(state && state.seenTrophies).includes(id)) return 1;
+  return 0;
 }
 function trophyStart() {
   const s = state && state.trophiesStartDate;
@@ -359,8 +375,9 @@ function trophyFacts() {
   const { max } = trophyBounds();
   const start = trophyStart();
   const now = new Date();
-  let streak = 0, bestStreak = 0;
+  let streak = 0, bestStreak = 0, currentStreak = 0;
   const streakAt = {};
+  const streakCounts = { 7: 0, 30: 0, 100: 0, 365: 0 };
   const bonusDates = [];
   const sessionHits = [];
   if (start <= max) {
@@ -368,7 +385,12 @@ function trophyFacts() {
       if (isDayChecked(k)) {
         streak++;
         if (streak > bestStreak) bestStreak = streak;
-        for (const t of [7, 30, 100, 365]) if (streak === t && !streakAt[t]) streakAt[t] = k;
+        for (const t of [7, 30, 100, 365]) {
+          if (streak === t) {
+            streakCounts[t]++;
+            if (!streakAt[t]) streakAt[t] = k;
+          }
+        }
         sessionHits.push(k);
       } else streak = 0;
       if (isBonus(k)) {
@@ -376,8 +398,11 @@ function trophyFacts() {
         sessionHits.push(k);
       }
     });
+    currentStreak = streak;
   }
-  let bestWeekMain = 0, bestWeekSum = 0, perfectWeek = null, doubleWeek = null;
+  let bestWeekMain = 0, bestWeekSum = 0;
+  const perfectWeeks = [];
+  const doubleWeeks = [];
   if (start <= max) {
     let monday = mondayOf(parseKey(start));
     const lastMonday = mondayOf(parseKey(max));
@@ -386,8 +411,8 @@ function trophyFacts() {
       if (p.main > bestWeekMain) bestWeekMain = p.main;
       if (p.main + p.bonus > bestWeekSum) bestWeekSum = p.main + p.bonus;
       const sunday = dkey(addDays(monday, 6));
-      if (sunday >= start && p.main === 7 && !perfectWeek) perfectWeek = sunday;
-      if (sunday >= start && p.main === 7 && p.bonus === 7 && !doubleWeek) doubleWeek = sunday;
+      if (sunday >= start && sunday <= max && p.main === 7) perfectWeeks.push(sunday);
+      if (sunday >= start && sunday <= max && p.main === 7 && p.bonus === 7) doubleWeeks.push(sunday);
       monday = addDays(monday, 7);
     }
   }
@@ -412,10 +437,31 @@ function trophyFacts() {
       cursor = new Date(y, m + 1, 1);
     }
   }
+  let triRun = 0, triCount = 0, triDate = null;
+  if (start <= max) {
+    const doneMonths = new Set(completeMonths);
+    const startDate = parseKey(start);
+    let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const endM = parseKey(max);
+    while (cursor.getFullYear() < endM.getFullYear() || (cursor.getFullYear() === endM.getFullYear() && cursor.getMonth() <= endM.getMonth())) {
+      const y = cursor.getFullYear(), m = cursor.getMonth();
+      const monthEnd = dkey(new Date(y, m + 1, 0));
+      if (monthEnd > max) break;
+      if (doneMonths.has(monthEnd)) {
+        triRun++;
+        if (triRun % 3 === 0) {
+          triCount++;
+          if (!triDate) triDate = monthEnd;
+        }
+      } else triRun = 0;
+      cursor = new Date(y, m + 1, 1);
+    }
+  }
   const est = programEstimates(state.program);
   const n = sessionHits.length;
   return {
-    bestStreak, streakAt, bestWeekMain, bestWeekSum, perfectWeek, doubleWeek,
+    bestStreak, currentStreak, streakAt, streakCounts, bestWeekMain, bestWeekSum,
+    perfectWeeks, doubleWeeks, triCount, triRun, triDate,
     bestMonth, completeMonths, bonusDates, sessionHits,
     reps: est.push, plankMin: est.plankMin, hangMin: est.hangMin, pullsPer: est.pulls,
     pompes: n * est.push,
@@ -436,41 +482,61 @@ function trophyBoard() {
     const r = Math.round(n * 10) / 10;
     return r.toLocaleString('fr-FR');
   };
+  const streakMedal = (id, name, days) => {
+    const count = f.streakCounts[days] || 0;
+    const toward = f.currentStreak >= days ? 0 : f.currentStreak;
+    return {
+      id, group: 'Régularité', name, stackable: true, count,
+      desc: days + ' jours cochés d’affilée.',
+      unlocked: count >= 1,
+      date: f.streakAt[days] || null,
+      progress: count >= 1 ? `${toward}/${days} vers ×${count + 1}` : `${f.bestStreak} / ${days} jours`,
+      nextProgress: true
+    };
+  };
+  const triToward = f.triRun % 3;
   const defs = [
-    { id: 'streak-7', group: 'Régularité', name: 'Recrue', desc: '7 jours cochés d’affilée.', unlocked: f.bestStreak >= 7, date: f.streakAt[7] || null, progress: `${f.bestStreak} / 7 jours` },
-    { id: 'streak-30', group: 'Régularité', name: 'Camarade discipliné', desc: '30 jours cochés d’affilée.', unlocked: f.bestStreak >= 30, date: f.streakAt[30] || null, progress: `${f.bestStreak} / 30 jours` },
-    { id: 'streak-100', group: 'Régularité', name: 'Héros du Travail', desc: '100 jours cochés d’affilée.', unlocked: f.bestStreak >= 100, date: f.streakAt[100] || null, progress: `${f.bestStreak} / 100 jours` },
-    { id: 'streak-365', group: 'Régularité', name: 'Ordre de Lénine', desc: '365 jours cochés d’affilée.', unlocked: f.bestStreak >= 365, date: f.streakAt[365] || null, progress: `${f.bestStreak} / 365 jours` },
-    { id: 'week-perfect', group: 'Semaines', name: 'Semaine parfaite', desc: 'Les 7 jours d’une semaine cochés.', unlocked: !!f.perfectWeek, date: f.perfectWeek, progress: `${f.bestWeekMain} / 7 jours` },
-    { id: 'week-double', group: 'Semaines', name: 'Semaine double', desc: '7 jours cochés et 7 bonus la même semaine.', unlocked: !!f.doubleWeek, date: f.doubleWeek, progress: `${Math.min(f.bestWeekSum, 14)} / 14` },
-    { id: 'month-full', group: 'Mois', name: 'Mois complet', desc: 'Tous les jours d’un mois cochés.', unlocked: f.completeMonths.length >= 1, date: f.completeMonths[0] || null, progress: `${f.bestMonth.checked} / ${f.bestMonth.dim} jours` },
-    { id: 'month-5', group: 'Mois', name: 'Plan quinquennal', desc: 'Cinq mois complets, d’affilée ou non.', unlocked: f.completeMonths.length >= 5, date: f.completeMonths[4] || null, progress: `${f.completeMonths.length} / 5 mois` },
+    streakMedal('streak-7', 'Recrue', 7),
+    streakMedal('streak-30', 'Camarade discipliné', 30),
+    streakMedal('streak-100', 'Héros du Travail', 100),
+    streakMedal('streak-365', 'Ordre de Lénine', 365),
+    { id: 'week-perfect', group: 'Semaines', name: 'Semaine parfaite', desc: 'Les 7 jours d’une semaine cochés.', stackable: true, count: f.perfectWeeks.length, unlocked: f.perfectWeeks.length >= 1, date: f.perfectWeeks[0] || null, progress: `${f.bestWeekMain} / 7 jours` },
+    { id: 'week-double', group: 'Semaines', name: 'Semaine double', desc: '7 jours cochés et 7 bonus la même semaine.', stackable: true, count: f.doubleWeeks.length, unlocked: f.doubleWeeks.length >= 1, date: f.doubleWeeks[0] || null, progress: `${Math.min(f.bestWeekSum, 14)} / 14` },
+    { id: 'month-full', group: 'Mois', name: 'Mois complet', desc: 'Tous les jours d’un mois cochés.', stackable: true, count: f.completeMonths.length, unlocked: f.completeMonths.length >= 1, date: f.completeMonths[0] || null, progress: `${f.bestMonth.checked} / ${f.bestMonth.dim} jours` },
+    { id: 'trimestre', group: 'Mois', name: 'Trimestre', desc: 'Trois mois complets d’affilée.', stackable: true, count: f.triCount, unlocked: f.triCount >= 1, date: f.triDate, nextProgress: true, progress: f.triCount >= 1 ? `${triToward}/3 vers ×${f.triCount + 1}` : `${f.triRun} / 3 mois` },
     { id: 'bonus-1', group: 'Bonus', name: 'Premier bonus', desc: 'La première séance bonus.', unlocked: f.bonusDates.length >= 1, date: hit(f.bonusDates, 1), progress: `${f.bonusDates.length} / 1 bonus` },
     { id: 'bonus-10', group: 'Bonus', name: 'Stakhanoviste', desc: 'Dix séances bonus.', unlocked: f.bonusDates.length >= 10, date: hit(f.bonusDates, 10), progress: `${f.bonusDates.length} / 10 bonus` },
-    { id: 'bonus-50', group: 'Bonus', name: 'Stakhanoviste d’or', desc: 'Cinquante séances bonus.', unlocked: f.bonusDates.length >= 50, date: hit(f.bonusDates, 50), progress: `${f.bonusDates.length} / 50 bonus` },
+    { id: 'bonus-50', group: 'Bonus', name: 'Héros de l’Union', desc: 'Cinquante séances bonus.', unlocked: f.bonusDates.length >= 50, date: hit(f.bonusDates, 50), progress: `${f.bonusDates.length} / 50 bonus` },
     { id: 'sessions-50', group: 'Séances', name: '50 séances', desc: 'Cinquante séances, bonus compris.', unlocked: f.sessionHits.length >= 50, date: hit(f.sessionHits, 50), progress: `${f.sessionHits.length} / 50 séances` },
     { id: 'sessions-100', group: 'Séances', name: '100 séances', desc: 'Cent séances au compteur.', unlocked: f.sessionHits.length >= 100, date: hit(f.sessionHits, 100), progress: `${f.sessionHits.length} / 100 séances` },
     { id: 'sessions-250', group: 'Séances', name: '250 séances', desc: 'Deux cent cinquante séances.', unlocked: f.sessionHits.length >= 250, date: hit(f.sessionHits, 250), progress: `${f.sessionHits.length} / 250 séances` },
     { id: 'sessions-500', group: 'Séances', name: '500 séances', desc: 'Cinq cents séances.', unlocked: f.sessionHits.length >= 500, date: hit(f.sessionHits, 500), progress: `${f.sessionHits.length} / 500 séances` },
-    { id: 'push-1000', group: 'Pompes', name: '1 000 pompes', desc: 'Estimation : séances × pompes du programme.', unlocked: f.pompes >= 1000, date: amountDate(f.reps, 1000), progress: `${fmtInt(f.pompes)} / ${fmtInt(1000)} (estimation)` },
-    { id: 'push-10000', group: 'Pompes', name: '10 000 pompes', desc: 'Estimation d’après le programme actuel.', unlocked: f.pompes >= 10000, date: amountDate(f.reps, 10000), progress: `${fmtInt(f.pompes)} / ${fmtInt(10000)} (estimation)` },
-    { id: 'push-50000', group: 'Pompes', name: '50 000 pompes', desc: 'Estimation. Le programme actuel sert de base.', unlocked: f.pompes >= 50000, date: amountDate(f.reps, 50000), progress: `${fmtInt(f.pompes)} / ${fmtInt(50000)} (estimation)` },
-    { id: 'plank-10', group: 'Planche', name: 'Sentinelle', desc: '10 minutes de planche. Estimation.', unlocked: f.plank >= 10, date: amountDate(f.plankMin, 10), progress: `${qty(f.plank)} / 10 min (estimation)` },
-    { id: 'plank-60', group: 'Planche', name: 'Colonne d’acier', desc: '60 minutes de planche. Estimation.', unlocked: f.plank >= 60, date: amountDate(f.plankMin, 60), progress: `${qty(f.plank)} / 60 min (estimation)` },
-    { id: 'plank-300', group: 'Planche', name: 'Mur du Kremlin', desc: '300 minutes de planche. Estimation.', unlocked: f.plank >= 300, date: amountDate(f.plankMin, 300), progress: `${qty(f.plank)} / 300 min (estimation)` },
-    { id: 'plank-1000', group: 'Planche', name: 'Fondation d’acier', desc: '1 000 minutes de planche. Estimation.', unlocked: f.plank >= 1000, date: amountDate(f.plankMin, 1000), progress: `${qty(f.plank)} / ${fmtInt(1000)} min (estimation)` },
-    { id: 'hang-10', group: 'Suspension', name: 'Première prise', desc: '10 minutes de suspension. Estimation.', unlocked: f.hang >= 10, date: amountDate(f.hangMin, 10), progress: `${qty(f.hang)} / 10 min (estimation)` },
-    { id: 'hang-60', group: 'Suspension', name: 'Barre d’acier', desc: '60 minutes de suspension. Estimation.', unlocked: f.hang >= 60, date: amountDate(f.hangMin, 60), progress: `${qty(f.hang)} / 60 min (estimation)` },
-    { id: 'hang-300', group: 'Suspension', name: 'Vigie rouge', desc: '300 minutes de suspension. Estimation.', unlocked: f.hang >= 300, date: amountDate(f.hangMin, 300), progress: `${qty(f.hang)} / 300 min (estimation)` },
-    { id: 'pull-100', group: 'Tractions', name: 'Cent tractions', desc: '100 tractions. Estimation.', unlocked: f.pulls >= 100, date: amountDate(f.pullsPer, 100), progress: `${fmtInt(f.pulls)} / 100 (estimation)` },
-    { id: 'pull-1000', group: 'Tractions', name: 'Millier de la barre', desc: '1 000 tractions. Estimation.', unlocked: f.pulls >= 1000, date: amountDate(f.pullsPer, 1000), progress: `${fmtInt(f.pulls)} / ${fmtInt(1000)} (estimation)` },
-    { id: 'pull-5000', group: 'Tractions', name: 'Légende de la barre', desc: '5 000 tractions. Estimation.', unlocked: f.pulls >= 5000, date: amountDate(f.pullsPer, 5000), progress: `${fmtInt(f.pulls)} / ${fmtInt(5000)} (estimation)` }
+    { id: 'push-1000', group: 'Pompes', name: 'Forgeron', desc: '1 000 pompes.', unlocked: f.pompes >= 1000, date: amountDate(f.reps, 1000), progress: `${fmtInt(f.pompes)} / ${fmtInt(1000)}` },
+    { id: 'push-10000', group: 'Pompes', name: 'Brigade de choc', desc: '10 000 pompes.', unlocked: f.pompes >= 10000, date: amountDate(f.reps, 10000), progress: `${fmtInt(f.pompes)} / ${fmtInt(10000)}` },
+    { id: 'push-50000', group: 'Pompes', name: 'Titan de l’Oural', desc: '50 000 pompes.', unlocked: f.pompes >= 50000, date: amountDate(f.reps, 50000), progress: `${fmtInt(f.pompes)} / ${fmtInt(50000)}` },
+    { id: 'plank-10', group: 'Planche', name: 'Sentinelle', desc: '10 minutes de planche.', unlocked: f.plank >= 10, date: amountDate(f.plankMin, 10), progress: `${qty(f.plank)} / 10 min` },
+    { id: 'plank-60', group: 'Planche', name: 'Colonne d’acier', desc: '60 minutes de planche.', unlocked: f.plank >= 60, date: amountDate(f.plankMin, 60), progress: `${qty(f.plank)} / 60 min` },
+    { id: 'plank-300', group: 'Planche', name: 'Bastion de Stalingrad', desc: '300 minutes de planche.', unlocked: f.plank >= 300, date: amountDate(f.plankMin, 300), progress: `${qty(f.plank)} / 300 min` },
+    { id: 'plank-1000', group: 'Planche', name: 'Mur du Kremlin', desc: '1 000 minutes de planche.', unlocked: f.plank >= 1000, date: amountDate(f.plankMin, 1000), progress: `${qty(f.plank)} / ${fmtInt(1000)} min` },
+    { id: 'hang-10', group: 'Suspension', name: 'Première prise', desc: '10 minutes de suspension.', unlocked: f.hang >= 10, date: amountDate(f.hangMin, 10), progress: `${qty(f.hang)} / 10 min` },
+    { id: 'hang-60', group: 'Suspension', name: 'Barre d’acier', desc: '60 minutes de suspension.', unlocked: f.hang >= 60, date: amountDate(f.hangMin, 60), progress: `${qty(f.hang)} / 60 min` },
+    { id: 'hang-300', group: 'Suspension', name: 'Étau soviétique', desc: '300 minutes de suspension.', unlocked: f.hang >= 300, date: amountDate(f.hangMin, 300), progress: `${qty(f.hang)} / 300 min` },
+    { id: 'pull-100', group: 'Tractions', name: 'Premier assaut', desc: '100 tractions.', unlocked: f.pulls >= 100, date: amountDate(f.pullsPer, 100), progress: `${fmtInt(f.pulls)} / 100` },
+    { id: 'pull-1000', group: 'Tractions', name: 'Bras de l’Armée rouge', desc: '1 000 tractions.', unlocked: f.pulls >= 1000, date: amountDate(f.pullsPer, 1000), progress: `${fmtInt(f.pulls)} / ${fmtInt(1000)}` },
+    { id: 'pull-5000', group: 'Tractions', name: 'Héros de Berlin', desc: '5 000 tractions.', unlocked: f.pulls >= 5000, date: amountDate(f.pullsPer, 5000), progress: `${fmtInt(f.pulls)} / ${fmtInt(5000)}` }
   ];
   return defs;
 }
+function medalLabel(t) {
+  return t.count > 1 ? t.name + ' ×' + t.count : t.name;
+}
 function unseenTrophies() {
   const seen = new Set(seenList(state.seenTrophies));
-  return trophyBoard().filter((t) => t.unlocked && !seen.has(t.id));
+  return trophyBoard().filter((t) => {
+    const count = t.stackable ? (t.count || 0) : (t.unlocked ? 1 : 0);
+    if (!t.stackable) return t.unlocked && !seen.has(t.id);
+    return count > seenCountFor(t.id);
+  });
 }
 function maybeShowTrophyOverlay() {
   const el = document.getElementById('trophy-overlay');
@@ -478,9 +544,9 @@ function maybeShowTrophyOverlay() {
   const fresh = unseenTrophies();
   if (!fresh.length) return;
   const many = fresh.length > 1;
-  const title = many ? 'Nouveaux trophées' : fresh[0].name;
+  const title = many ? 'Nouvelles médailles' : medalLabel(fresh[0]);
   const body = many
-    ? `<ul>${fresh.map((t) => `<li>${esc(t.name)}</li>`).join('')}</ul>`
+    ? `<ul>${fresh.map((t) => `<li>${esc(medalLabel(t))}</li>`).join('')}</ul>`
     : `<p class="muted">${esc(fresh[0].desc)}</p>`;
   el.innerHTML = `<div class="trophy-pop">
     <img src="images/etoile-kremlin.png" alt="" width="140" height="140">
@@ -499,8 +565,18 @@ function dismissTrophyOverlay() {
   if (!el || el.classList.contains('hidden')) return;
   const ids = (el.dataset.ids || '').split(',').filter(Boolean);
   const seen = seenList(state.seenTrophies);
-  for (const id of ids) if (!seen.includes(id)) seen.push(id);
+  const counts = seenCounts(state.seenTrophyCounts);
+  const board = trophyBoard();
+  for (const id of ids) {
+    if (!seen.includes(id)) seen.push(id);
+    const item = board.find((t) => t.id === id);
+    if (item && item.stackable) {
+      const n = item.count || 0;
+      if (n > (counts[id] || 0)) counts[id] = n;
+    }
+  }
   state.seenTrophies = seen;
+  state.seenTrophyCounts = counts;
   el.classList.add('hidden');
   el.innerHTML = '';
   delete el.dataset.ids;
@@ -1026,7 +1102,7 @@ function viewProgram() {
 function viewTrophees() {
   const items = trophyBoard();
   const got = items.filter((t) => t.unlocked).length;
-  let h = `<h2 class="screen-title">Trophées</h2>
+  let h = `<h2 class="screen-title">Médailles</h2>
   <p class="trophy-score">${got} / ${items.length}</p>
   <p class="muted small trophy-since">Comptés depuis le 18 octobre 2026</p>`;
   let group = '';
@@ -1036,8 +1112,10 @@ function viewTrophees() {
       group = t.group;
       h += `<h3 class="trophy-group">${esc(group)}</h3><div class="trophy-grid">`;
     }
-    const when = t.unlocked && t.date ? `Obtenu le ${fmtTrophyDate(t.date)}` : (t.unlocked ? 'Obtenu' : t.progress);
+    const when = !t.unlocked || t.nextProgress ? t.progress
+      : (t.date ? `Obtenu le ${fmtTrophyDate(t.date)}` : 'Obtenu');
     h += `<article class="trophy ${t.unlocked ? 'unlocked' : 'locked'}">
+      ${t.count > 1 ? `<span class="trophy-count">×${t.count}</span>` : ''}
       <img src="images/etoile-kremlin.png" alt="" width="72" height="72" class="${t.unlocked ? 'on' : 'off'}">
       <div class="trophy-name">${esc(t.name)}</div>
       <p class="trophy-desc">${esc(t.desc)}</p>
