@@ -1125,7 +1125,6 @@ function viewTrophees() {
     </article>`;
   }
   if (group) h += `</div>`;
-  h += `<p class="muted small" style="text-align:center">Depuis le 18 octobre 2026. Les jours d’avant restent dans Calendrier et Calories. Planche, suspension, tractions et pompes sont une estimation.</p>`;
   return h;
 }
 
