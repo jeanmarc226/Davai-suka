@@ -619,5 +619,12 @@ save();
 render();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  // Un seul rechargement quand le nouveau worker prend la main (évite une boucle).
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW', e)));
 }

@@ -14,7 +14,9 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE_VERSION).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE_VERSION).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -25,16 +27,59 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Réseau d'abord (pour recevoir les mises à jour), cache en secours hors ligne.
+// Icônes et polices : le cache suffit (elles changent avec CACHE_VERSION).
+function isCacheFirst(url) {
+  return url.pathname.includes('/icons/') || url.pathname.includes('/fonts/');
+}
+
+// Navigation, HTML, script, feuille de style et manifeste : réseau d'abord,
+// pour prendre la mise à jour dès la prochaine ouverture. Hors ligne, le cache.
+function isNetworkFirst(request, url) {
+  if (request.mode === 'navigate') return true;
+  const path = url.pathname;
+  return path.endsWith('/')
+    || path.endsWith('.html')
+    || path.endsWith('/app.js')
+    || path.endsWith('/styles.css')
+    || path.endsWith('.webmanifest');
+}
+
+function remember(request, response) {
+  if (!response || !response.ok || response.type !== 'basic') return Promise.resolve();
+  const copy = response.clone();
+  const key = new Request(request.url, { method: 'GET' });
+  return caches.open(CACHE_VERSION).then((cache) => cache.put(key, copy)).catch(() => {});
+}
+
+function fromCache(request) {
+  return caches.match(request, { ignoreSearch: true }).then((cached) => {
+    if (cached) return cached;
+    if (request.mode === 'navigate') return caches.match('./index.html');
+    return new Response('Hors ligne', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  });
+}
+
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;
-  e.respondWith(
-    fetch(e.request)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE_VERSION).then((c) => c.put(e.request, copy));
-        return res;
+  const url = new URL(e.request.url);
+
+  if (isCacheFirst(url)) {
+    e.respondWith(
+      caches.match(e.request, { ignoreSearch: true }).then((cached) => {
+        if (cached) return cached;
+        return fetch(e.request)
+          .then((res) => remember(e.request, res).then(() => res))
+          .catch(() => fromCache(e.request));
       })
-      .catch(() => caches.match(e.request, { ignoreSearch: true }).then((r) => r || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  if (!isNetworkFirst(e.request, url)) return;
+
+  e.respondWith(
+    fetch(e.request, { cache: 'reload' })
+      .then((res) => remember(e.request, res).then(() => res))
+      .catch(() => fromCache(e.request))
   );
 });
