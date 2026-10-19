@@ -7,6 +7,8 @@
 // ⬇️ NOM DE L'APPLICATION : changez-le ici (et aussi dans manifest.webmanifest + <title> d'index.html)
 const APP_NAME = 'Davai Suka';
 
+// Clé stable : ne pas la renommer, ni vider les données déjà enregistrées.
+// Toute évolution du format doit être une migration additive.
 const STORAGE_KEY = 'davaisuka.data.v1';
 const DEFAULT_WEIGHT = 72.6; // kg (≈ 160 lb), modifiable dans Programme → Réglages
 const KG_PER_LB = 0.45359237;
@@ -100,13 +102,16 @@ function load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const d = JSON.parse(raw);
+      if (!d || typeof d !== 'object' || Array.isArray(d)) throw new Error('format');
       const program = Array.isArray(d.program) ? d.program : freshProgram();
+      const days = d.days && typeof d.days === 'object' && !Array.isArray(d.days) ? d.days : {};
       return {
+        ...d,
         program: d.parenNamesMigrated ? program : migrateSavedNames(program),
         weight: d.weightSet && Number(d.weight) > 0 ? Number(d.weight) : DEFAULT_WEIGHT,
         weightSet: !!d.weightSet,
         weightUnit: d.weightUnit === 'lb' ? 'lb' : 'kg',
-        days: d.days && typeof d.days === 'object' ? d.days : {},
+        days,
         sessions: Array.isArray(d.sessions) ? d.sessions : [],
         today: d.today || null,
         parenNamesMigrated: true
