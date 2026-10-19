@@ -7,6 +7,12 @@
 // ⬇️ NOM DE L'APPLICATION : changez-le ici (et aussi dans manifest.webmanifest + <title> d'index.html)
 const APP_NAME = 'Davai Suka';
 
+function appVersionLabel() {
+  const raw = typeof CACHE_VERSION === 'string' ? CACHE_VERSION : '';
+  const m = /-v(\d+)$/.exec(raw);
+  return APP_NAME + ' — v1.' + (m ? m[1] : '0');
+}
+
 // Clé stable : ne pas la renommer, ni vider les données déjà enregistrées.
 // Toute évolution du format doit être une migration additive.
 const STORAGE_KEY = 'davaisuka.data.v1';
@@ -516,6 +522,7 @@ function render() {
   app.innerHTML = ({ accueil: viewHome, semaine: viewWeek, calories: viewCalories, programme: viewProgram, trophees: viewTrophees })[tab]();
   maybeShowTrophyOverlay();
   musicPaint();
+  bindKcalChart();
 }
 
 /* ----- 1. Accueil ----- */
@@ -715,67 +722,245 @@ function viewCalories() {
     <div class="stat"><div class="v">${sess.length ? fmtKcal(sess[sess.length - 1].kcal) : '–'}</div><div class="l">Dernière séance (kcal)</div></div>
     <div class="stat"><div class="v">${sess.length ? fmtKcal(avg) : '–'}</div><div class="l">Moyenne / séance</div></div>
   </div>
-  <div class="card"><h3>Évolution</h3>`;
-  if (!sess.length) {
-    h += `<div class="empty"><div class="e">📊</div>Terminez votre première séance pour voir le graphique.</div>`;
-  } else {
-    h += `<div class="chart-wrap">${chartSVG(sess)}</div>
-    <div class="legend"><span><i style="background:var(--orange)"></i>kcal par séance</span><span><i style="background:var(--accent)"></i>Cumul</span></div>`;
-  }
-  h += `</div>
-  <div class="card">
-    <h3>Comment c’est calculé ?</h3>
-    <div class="formula"><strong>kcal = MET × poids (kg) × durée (h)</strong><br>
-    Poids utilisé : <strong>${fmtWeight(state.weight)}</strong>${state.weightSet ? '' : ' (valeur par défaut — modifiable dans Programme ⚙️)'}<br>
-    Durée estimée par exercice (≈ 2 s par pompe, 1 s par mountain climber, 3 s par traction…).
-    MET : pompes / mountain climbers / tractions ≈ 8, planche ≈ 4.<br>
-    Séance actuelle ≈ <strong>${fmtKcal(planKcal)} kcal</strong>. Les calories de chaque séance sont figées au moment où elle est terminée.</div>
-  </div>
-  <div class="card"><h3>Historique</h3>`;
-  if (!sess.length) h += `<div class="muted">Aucune séance enregistrée.</div>`;
-  else {
-    h += `<ul class="sess-list">`;
-    for (const s of [...sess].reverse().slice(0, 60)) {
-      h += `<li><div><div class="ex-name" style="text-transform:capitalize">${esc(parseKey(s.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}${s.bonus ? ' · bonus' : ''}</div>
-      <div class="ex-meta">${s.exDone}/${s.exTotal} exercices · ${fmtKcal(s.weight)} kg</div></div><span class="k">${fmtKcal(s.kcal)} kcal</span></li>`;
-    }
-    h += `</ul>`;
-  }
-  h += `</div>`;
+  <div class="card kcal-card"><h3>Évolution</h3>${kcalChartHtml()}</div>
+  ${formulaDetails(planKcal)}`;
   return h;
 }
 
-function chartSVG(all) {
-  const sess = all.slice(-20); // 20 dernières séances
-  let cum = all.slice(0, all.length - sess.length).reduce((a, s) => a + s.kcal, 0);
-  const pts = sess.map((s) => { cum += s.kcal; return { s, cum }; });
-  const W = 360, H = 230, pl = 34, pr = 40, pt = 14, pb = 30;
-  const iw = W - pl - pr, ih = H - pt - pb;
-  const nice = (v) => { const raw = v / 4, mag = Math.pow(10, Math.floor(Math.log10(raw))); const m = [1, 2, 2.5, 5, 10].find((k) => k * mag >= raw); return m * mag * 4; };
-  const maxBar = nice(Math.max(...sess.map((s) => s.kcal), 1) * 1.05);
-  const maxCum = nice(Math.max(pts[pts.length - 1].cum, 1));
-  const slot = iw / sess.length, bw = Math.min(26, slot * 0.6);
-  const x = (i) => pl + slot * i + slot / 2;
-  const yb = (v) => pt + ih - (v / maxBar) * ih;
-  const yc = (v) => pt + ih - (v / maxCum) * ih;
-  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Graphique des calories">`;
-  for (let i = 0; i <= 4; i++) {
-    const y = pt + (ih * i) / 4;
-    g += `<line x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}" stroke="#2a3240" stroke-width="1"/>`;
-    g += `<text x="${pl - 6}" y="${y + 4}" fill="#ff8a3d" font-size="10" text-anchor="end">${Math.round(maxBar * (1 - i / 4))}</text>`;
-    g += `<text x="${W - pr + 6}" y="${y + 4}" fill="#c6ff3d" font-size="10">${Math.round(maxCum * (1 - i / 4))}</text>`;
+const KCAL_RANGES = ['1J', '1M', '3M', '6M', '1A', 'Tout'];
+let kcalPlot = null;
+
+function kcalRangeId() {
+  return KCAL_RANGES.includes(ui.kcalRange) ? ui.kcalRange : '1M';
+}
+function fmtSignedKcal(n) {
+  const v = Math.round(Number(n) * 10) / 10;
+  const sign = v < 0 ? '−' : '+';
+  return sign + fmtKcal(Math.abs(v)) + ' kcal';
+}
+function niceCeil(v) {
+  if (!(v > 0)) return 1;
+  const padded = v * 1.08;
+  const mag = Math.pow(10, Math.floor(Math.log10(padded)));
+  const n = padded / mag;
+  const m = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((k) => k >= n - 1e-9) || 10;
+  return m * mag;
+}
+function kcalList() {
+  return (Array.isArray(state.sessions) ? state.sessions : []).filter((s) => s && typeof s.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.date));
+}
+function kcalBounds(range, list) {
+  const now = new Date();
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (range === '1J') return { start: end, end };
+  if (range === 'Tout') {
+    let start = end;
+    for (const s of list) {
+      const d = parseKey(s.date);
+      if (d < start) start = d;
+    }
+    return { start, end };
   }
-  const every = Math.ceil(sess.length / 7);
-  sess.forEach((s, i) => {
-    g += `<rect x="${x(i) - bw / 2}" y="${yb(s.kcal)}" width="${bw}" height="${pt + ih - yb(s.kcal)}" rx="4" fill="#ff8a3d" opacity=".9"/>`;
-    const last = sess.length - 1, lastLab = last - (last % every);
-    if (i % every === 0 || (i === last && last - lastLab >= every * 0.7))
-      g += `<text x="${x(i)}" y="${H - 10}" fill="#8b96a8" font-size="10" text-anchor="middle">${fmtDM(parseKey(s.date))}</text>`;
+  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  if (range === '1M') start.setMonth(start.getMonth() - 1);
+  else if (range === '3M') start.setMonth(start.getMonth() - 3);
+  else if (range === '6M') start.setMonth(start.getMonth() - 6);
+  else start.setFullYear(start.getFullYear() - 1);
+  return { start, end };
+}
+function sessionHour(s, index, count) {
+  if (s.at) {
+    const dt = new Date(s.at);
+    if (!Number.isNaN(dt.getTime())) return dt.getHours() + dt.getMinutes() / 60 + dt.getSeconds() / 3600;
+  }
+  return ((index + 1) / (count + 1)) * 24;
+}
+function hourLabel(hour) {
+  const hh = Math.floor(hour);
+  const mm = Math.round((hour - hh) * 60) % 60;
+  return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+}
+function buildKcalModel() {
+  const range = kcalRangeId();
+  const list = kcalList();
+  if (range === '1J') {
+    const k = todayKey();
+    const todays = list.filter((s) => s.date === k).slice().sort((a, b) => {
+      const ta = a.at ? Date.parse(a.at) : NaN;
+      const tb = b.at ? Date.parse(b.at) : NaN;
+      if (Number.isFinite(ta) && Number.isFinite(tb)) return ta - tb;
+      if (Number.isFinite(ta)) return -1;
+      if (Number.isFinite(tb)) return 1;
+      return 0;
+    });
+    let cum = 0;
+    const points = todays.map((s, i) => {
+      const kcal = Number(s.kcal) || 0;
+      cum += kcal;
+      const hour = sessionHour(s, i, todays.length);
+      return {
+        label: hourLabel(hour) + (s.bonus ? ' · bonus' : ''),
+        y: Math.round(cum * 10) / 10,
+        hour
+      };
+    });
+    return { range, empty: points.length === 0, intraday: true, points, total: Math.round(cum * 10) / 10, change: Math.round(cum * 10) / 10 };
+  }
+  const { start, end } = kcalBounds(range, list);
+  const byDay = {};
+  const startK = dkey(start);
+  const endK = dkey(end);
+  for (const s of list) {
+    if (s.date < startK || s.date > endK) continue;
+    byDay[s.date] = (byDay[s.date] || 0) + (Number(s.kcal) || 0);
+  }
+  const points = [{ key: startK, label: fmtShort(start), y: 0 }];
+  let cum = 0;
+  let k = startK;
+  let guard = 0;
+  while (guard < 4000) {
+    cum += byDay[k] || 0;
+    const d = parseKey(k);
+    points.push({ key: k, label: fmtShort(d), y: Math.round(cum * 10) / 10 });
+    if (k === endK) break;
+    k = dkey(addDays(d, 1));
+    guard++;
+  }
+  const total = Math.round(cum * 10) / 10;
+  return { range, empty: false, intraday: false, points, total, change: total };
+}
+function kcalChartSVG(model) {
+  const W = 360, H = 214, pl = 40, pr = 12, pt = 16, pb = 28;
+  const iw = W - pl - pr, ih = H - pt - pb;
+  const pts = model.points;
+  const maxY = niceCeil(Math.max(...pts.map((p) => p.y), 0));
+  const yOf = (v) => pt + ih - (v / maxY) * ih;
+  const n = pts.length;
+  const xOf = (i) => {
+    if (model.intraday) return pl + (pts[i].hour / 24) * iw;
+    if (n <= 1) return pl + iw / 2;
+    return pl + (i / (n - 1)) * iw;
+  };
+  const xs = pts.map((_, i) => xOf(i));
+  const ys = pts.map((p) => yOf(p.y));
+  kcalPlot = {
+    w: W, h: H, xs, ys,
+    labels: pts.map((p) => p.label),
+    values: pts.map((p) => p.y),
+    top: pt, bottom: pt + ih
+  };
+  const base = yOf(0);
+  const line = xs.map((x, i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+  const area = `${line} L${xs[n - 1].toFixed(1)},${base.toFixed(1)} L${xs[0].toFixed(1)},${base.toFixed(1)} Z`;
+  let g = `<svg id="kcal-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumul des calories sur la période">
+    <defs><linearGradient id="kcal-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E10600" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#E10600" stop-opacity="0.02"/>
+    </linearGradient></defs>
+    <rect width="${W}" height="${H}" fill="#080404"/>`;
+  for (let i = 0; i <= 4; i++) {
+    const yy = pt + (ih * i) / 4;
+    const val = maxY * (1 - i / 4);
+    g += `<line x1="${pl}" x2="${W - pr}" y1="${yy}" y2="${yy}" stroke="#3a2424" stroke-width="1"/>`;
+    g += `<text x="${pl - 6}" y="${yy + 3}" fill="#E3B23C" font-size="10" text-anchor="end">${fmtKcal(val)}</text>`;
+  }
+  if (model.intraday) {
+    for (const hour of [0, 6, 12, 18, 24]) {
+      const x = pl + (hour / 24) * iw;
+      const anchor = hour === 0 ? 'start' : hour === 24 ? 'end' : 'middle';
+      g += `<text x="${x}" y="${H - 8}" fill="#8b96a8" font-size="10" text-anchor="${anchor}">${hour}h</text>`;
+    }
+  } else {
+    const ticks = [];
+    for (let i = 0; i < 4; i++) ticks.push(Math.round(i * (n - 1) / 3));
+    for (const i of [...new Set(ticks)]) {
+      g += `<text x="${xs[i].toFixed(1)}" y="${H - 8}" fill="#8b96a8" font-size="10" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}">${esc(pts[i].label)}</text>`;
+    }
+  }
+  g += `<path d="${area}" fill="url(#kcal-fill)"></path>`;
+  g += `<path d="${line}" fill="none" stroke="#E10600" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>`;
+  if (model.intraday) {
+    xs.forEach((x, i) => {
+      g += `<circle cx="${x.toFixed(1)}" cy="${ys[i].toFixed(1)}" r="5" fill="#080404" stroke="#E10600" stroke-width="2"></circle>`;
+    });
+  }
+  g += `<g id="kcal-cross" visibility="hidden">
+      <line id="kcal-cross-x" y1="${pt}" y2="${pt + ih}" stroke="#E3B23C" stroke-width="1" stroke-dasharray="3 3"/>
+      <circle id="kcal-cross-dot" r="4.5" fill="#080404" stroke="#E10600" stroke-width="2"/>
+    </g></svg>`;
+  return g;
+}
+function kcalChartHtml() {
+  const model = buildKcalModel();
+  kcalPlot = null;
+  const range = model.range;
+  let h = `<div class="kcal-ranges" role="group" aria-label="Période du graphique">`;
+  for (const id of KCAL_RANGES) {
+    h += `<button type="button" data-action="kcal-range" data-range="${id}" class="${id === range ? 'on' : ''}" aria-pressed="${id === range ? 'true' : 'false'}">${id}</button>`;
+  }
+  h += `</div>
+  <div class="kcal-quote">
+    <div class="kcal-px" id="kcal-period">${fmtKcal(model.total)}<span>kcal</span></div>
+    <div class="kcal-delta" id="kcal-change">${fmtSignedKcal(model.change)}</div>
+  </div>`;
+  if (model.empty) {
+    h += `<div class="kcal-empty">Aucune séance enregistrée aujourd’hui.</div>`;
+    return h;
+  }
+  h += `<div class="kcal-plot">${kcalChartSVG(model)}<div id="kcal-tip" class="kcal-tip hidden"></div></div>`;
+  return h;
+}
+function formulaDetails(planKcal) {
+  const weight = fmtWeight(state.weight) + (state.weightSet ? '' : ' (valeur par défaut — modifiable dans Programme ⚙️)');
+  const rows = [
+    ['Formule', 'kcal = MET × poids (kg) × durée (h)'],
+    ['Poids', 'Poids utilisé : ' + weight],
+    ['Durée', 'Durée estimée par exercice : ≈ 2 s par pompe, 1 s par mountain climber, 3 s par traction…'],
+    ['MET', 'Pompes / mountain climbers / tractions ≈ 8, planche ≈ 4'],
+    ['Séance actuelle', '≈ ' + fmtKcal(planKcal) + ' kcal'],
+    ['Séances passées', 'Les calories de chaque séance sont figées au moment où elle est terminée']
+  ];
+  return `<div class="card calc-card"><details class="calc-details fold">
+    <summary>Comment c’est calculé <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
+    <dl class="calc-legend">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+  </details></div>`;
+}
+function bindKcalChart() {
+  const svg = document.getElementById('kcal-chart');
+  const tip = document.getElementById('kcal-tip');
+  const cross = document.getElementById('kcal-cross');
+  const line = document.getElementById('kcal-cross-x');
+  const dot = document.getElementById('kcal-cross-dot');
+  if (!svg || !tip || !cross || !line || !dot || !kcalPlot) return;
+  const plot = kcalPlot;
+  const show = (ev) => {
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width) return;
+    const vx = ((ev.clientX - rect.left) / rect.width) * plot.w;
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < plot.xs.length; i++) {
+      const d = Math.abs(plot.xs[i] - vx);
+      if (d < bestD) { best = i; bestD = d; }
+    }
+    const x = plot.xs[best];
+    const y = plot.ys[best];
+    line.setAttribute('x1', String(x));
+    line.setAttribute('x2', String(x));
+    dot.setAttribute('cx', String(x));
+    dot.setAttribute('cy', String(y));
+    cross.setAttribute('visibility', 'visible');
+    tip.textContent = plot.labels[best] + ' · ' + fmtKcal(plot.values[best]) + ' kcal';
+    tip.classList.remove('hidden');
+    const left = Math.min(84, Math.max(16, (x / plot.w) * 100));
+    tip.style.left = left + '%';
+    tip.style.top = Math.max(12, (y / plot.h) * 100) + '%';
+  };
+  svg.addEventListener('pointerdown', (ev) => {
+    try { svg.setPointerCapture(ev.pointerId); } catch (e) { /* pointeur synthétique */ }
+    show(ev);
   });
-  const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${yc(p.cum).toFixed(1)}`).join(' ');
-  g += `<path d="${path}" fill="none" stroke="#c6ff3d" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`;
-  pts.forEach((p, i) => { g += `<circle cx="${x(i)}" cy="${yc(p.cum)}" r="3.5" fill="#0f1218" stroke="#c6ff3d" stroke-width="2"/>`; });
-  return g + `</svg>`;
+  svg.addEventListener('pointermove', show);
 }
 
 /* ----- 4. Programme ----- */
@@ -804,32 +989,36 @@ function viewProgram() {
     </div>
   </div>
   <div class="card">
-    <h3>⚙️ Réglages</h3>
-    <label class="f" for="weight">Poids du corps — sert au calcul des calories</label>
-    <div class="seg" style="margin-bottom:8px">
-      <button data-action="wunit" data-unit="kg" class="${state.weightUnit === 'kg' ? 'on' : ''}">kg</button>
-      <button data-action="wunit" data-unit="lb" class="${state.weightUnit === 'lb' ? 'on' : ''}">lb</button>
-    </div>
-    <div class="weight-row">
-      <input id="weight" type="number" inputmode="decimal" step="0.1" value="${state.weightUnit === 'lb' ? kgToLb(state.weight) : state.weight}" aria-label="Poids en ${state.weightUnit}">
-      <span class="unit">${state.weightUnit}</span>
-      <button class="btn primary" data-action="save-weight">Enregistrer</button>
-    </div>
-    <p class="muted small"><strong id="weight-show">${fmtWeight(state.weight)}</strong>${state.weightSet ? '' : ' — valeur par défaut'}. Les séances déjà faites gardent leurs calories.</p>
+    <details class="fold" id="prog-settings">
+      <summary>⚙️ Réglages <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
+      <label class="f" for="weight">Poids du corps — sert au calcul des calories</label>
+      <div class="seg" style="margin-bottom:8px">
+        <button data-action="wunit" data-unit="kg" class="${state.weightUnit === 'kg' ? 'on' : ''}">kg</button>
+        <button data-action="wunit" data-unit="lb" class="${state.weightUnit === 'lb' ? 'on' : ''}">lb</button>
+      </div>
+      <div class="weight-row">
+        <input id="weight" type="number" inputmode="decimal" step="0.1" value="${state.weightUnit === 'lb' ? kgToLb(state.weight) : state.weight}" aria-label="Poids en ${state.weightUnit}">
+        <span class="unit">${state.weightUnit}</span>
+        <button class="btn primary" data-action="save-weight">Enregistrer</button>
+      </div>
+      <p class="muted small"><strong id="weight-show">${fmtWeight(state.weight)}</strong>${state.weightSet ? '' : ' — valeur par défaut'}</p>
+    </details>
   </div>
   <div class="card">
-    <h3>💾 Mes données</h3>
-    <p class="muted small" style="margin-top:0">Tout est stocké uniquement sur ce téléphone. Faites une sauvegarde de temps en temps.</p>
-    <div class="btn-row">
-      <button class="btn ghost" data-action="export">Exporter</button>
-      <button class="btn ghost" data-action="import">Importer</button>
-    </div>
-    <input id="import-file" type="file" accept="application/json,.json" class="hidden">
-    <div style="height:10px"></div>
-    <button class="btn ghost" data-action="reset-program">Remettre le programme par défaut</button>
-    <button class="btn danger" data-action="wipe">Effacer toutes les données</button>
+    <details class="fold" id="prog-data">
+      <summary>💾 Mes données <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
+      <p class="muted small" id="data-note">Données stockées uniquement sur ce téléphone. Pensez à faire une sauvegarde régulièrement.</p>
+      <div class="btn-row">
+        <button class="btn ghost" data-action="export">Exporter</button>
+        <button class="btn ghost" data-action="import">Importer</button>
+      </div>
+      <input id="import-file" type="file" accept="application/json,.json" class="hidden">
+      <div style="height:10px"></div>
+      <button class="btn ghost" data-action="reset-program">Remettre le programme par défaut</button>
+      <button class="btn danger" data-action="wipe">Effacer toutes les données</button>
+    </details>
   </div>
-  <p class="muted small" style="text-align:center">${esc(APP_NAME)} · v1</p>`;
+  <p class="muted small app-version" id="app-version">${esc(appVersionLabel())}</p>`;
   return h;
 }
 
@@ -1590,6 +1779,13 @@ document.addEventListener('click', (ev) => {
     case 'week-prev': ui.weekOffset--; render(); break;
     case 'week-next': if (ui.weekOffset < 0) ui.weekOffset++; render(); break;
     case 'cal-mode': ui.calMode = el.dataset.mode === 'month' ? 'month' : 'week'; render(); break;
+    case 'kcal-range': {
+      const range = el.dataset.range;
+      if (!KCAL_RANGES.includes(range) || range === kcalRangeId()) return;
+      ui.kcalRange = range;
+      render();
+      break;
+    }
     case 'month-prev':
     case 'month-next': {
       const c = ensureMonthCursor();
