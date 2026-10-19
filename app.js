@@ -628,13 +628,11 @@ function viewHome() {
   if (done) {
     h += `<div class="done-banner">
       <div class="big">✅ Séance du jour terminée !</div>
-      <div class="muted" style="margin-top:6px">${done.exDone}/${done.exTotal} exercices · ≈ ${fmtKcal(done.kcal)} kcal <span class="badge">Estimation</span></div>
-      <div style="margin-top:6px">Bravo, à demain 🔥</div>
+      <div style="margin-top:6px">Bravo, à demain 👊</div>
     </div>`;
     if (bonusDone) {
       h += `<div class="done-banner bonus-banner">
         <div class="big">★ Séance bonus enregistrée</div>
-        <div class="muted" style="margin-top:6px">${bonusDone.exDone}/${bonusDone.exTotal} exercices · ≈ ${fmtKcal(bonusDone.kcal)} kcal <span class="badge">Estimation</span></div>
       </div>
       <button class="btn ghost" data-action="undo-bonus">Annuler la séance bonus</button>`;
     } else if (t.bonus && t.bonus.started) {
