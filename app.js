@@ -64,7 +64,7 @@ const MET_PROFILES = [
   { keys: ['mountain'], met: 8, spr: 1, label: 'Mountain climbers', noun: 'Mountain Climber', metNames: ['Mountain Climbers'] },
   { keys: ['pull-up', 'pull up', 'pullup', 'traction', 'hanging', 'suspension', 'barre fixe'], met: 8, spr: 3, label: 'Tractions / suspension', noun: 'Traction', metNames: ['Tractions', 'Suspension'] },
   { keys: ['push-up', 'push up', 'pushup', 'pompe'], met: 8, spr: 2, label: 'Pompes / push-ups', noun: 'Pompe', metNames: ['Pompes'] },
-  { keys: ['planche', 'plank', 'gainage'], met: 4, spr: 3, label: 'Planche / gainage', noun: 'Planche', metNames: ['Planche', 'Gainage'] },
+  { keys: ['planche', 'plank', 'gainage'], met: 5, spr: 3, label: 'Planche / gainage', noun: 'Planche', metNames: ['Planche', 'Gainage'] },
   { keys: ['burpee'], met: 8, spr: 4, label: 'Burpees', noun: 'Burpee', metNames: ['Burpees'] },
   { keys: ['jumping', 'saut', 'corde'], met: 8, spr: 1, label: 'Sauts / jumping jacks', noun: 'Saut', metNames: ['Sauts'] },
   { keys: ['squat', 'fente', 'lunge'], met: 5, spr: 3, label: 'Squats / fentes', noun: 'Squat ou Fente', metNames: ['Squats', 'Fentes'] },
@@ -803,7 +803,7 @@ function viewCalories() {
     <div class="stat"><div class="v">${sess.length ? fmtKcal(sess[sess.length - 1].kcal) : '–'}</div><div class="l">Dernière séance (kcal)</div></div>
     <div class="stat"><div class="v">${sess.length ? fmtKcal(avg) : '–'}</div><div class="l">Moyenne / séance</div></div>
   </div>
-  <div class="card kcal-card"><h3>Évolution</h3>${kcalChartHtml()}</div>
+  <div class="card kcal-card"><h3>Graphique</h3>${kcalChartHtml()}</div>
   ${formulaDetails(planKcal)}
   ${settingsFold()}`;
   return h;
