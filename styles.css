@@ -330,7 +330,8 @@ textarea { min-height: 70px; resize: vertical; }
 .hidden { display: none !important; }
 
 /* --- Trophées --- */
-.trophy-score { text-align: center; font-weight: 800; color: var(--orange); margin: -6px 0 8px; }
+.trophy-score { text-align: center; font-weight: 800; color: var(--orange); margin: -6px 0 2px; }
+.trophy-since { text-align: center; margin: 0 0 10px; }
 .trophy-group { margin: 14px 4px 8px; font-size: 13px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
 .trophy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .trophy {
