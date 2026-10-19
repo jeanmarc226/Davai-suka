@@ -115,11 +115,15 @@ function load() {
         bonusDays: boolMap(d.bonusDays),
         sessions: Array.isArray(d.sessions) ? d.sessions : [],
         today: d.today || null,
+        seenTrophies: seenList(d.seenTrophies),
         parenNamesMigrated: true
       };
     }
   } catch (e) { console.warn('Lecture des données impossible', e); }
-  return { program: freshProgram(), weight: DEFAULT_WEIGHT, weightSet: false, weightUnit: 'kg', days: {}, bonusDays: {}, sessions: [], today: null, parenNamesMigrated: true };
+  return { program: freshProgram(), weight: DEFAULT_WEIGHT, weightSet: false, weightUnit: 'kg', days: {}, bonusDays: {}, sessions: [], today: null, seenTrophies: [], parenNamesMigrated: true };
+}
+function seenList(raw) {
+  return Array.isArray(raw) ? raw.filter((x) => typeof x === 'string') : [];
 }
 function boolMap(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
@@ -264,19 +268,171 @@ function bonusNote(n) {
   return n > 0 ? `+${n} bonus` : '';
 }
 
+/* ---------- Trophées (calculés, rien à saisir) ---------- */
+function isPushUp(ex) {
+  if (!ex || ex.kind === 'pause' || ex.type !== 'reps') return false;
+  const n = normalize(ex.name);
+  return n.includes('pompe') || n.includes('push-up') || n.includes('push up') || n.includes('pushup');
+}
+function pushRepsPerSession() {
+  return exercises().reduce((a, e) => a + (isPushUp(e) ? (Number(e.value) || 0) : 0), 0);
+}
+function trophyBounds() {
+  let min = null;
+  const max = todayKey();
+  const consider = (k) => {
+    if (!k || k > max) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) return;
+    if (!min || k < min) min = k;
+  };
+  for (const k of Object.keys(state.days || {})) consider(k);
+  for (const k of Object.keys(state.bonusDays || {})) consider(k);
+  for (const s of state.sessions) consider(s.date);
+  return { min: min || max, max };
+}
+function eachDayKey(min, max, fn) {
+  let d = parseKey(min);
+  const end = parseKey(max);
+  while (d <= end) {
+    fn(dkey(d));
+    d = addDays(d, 1);
+  }
+}
+function trophyFacts() {
+  const { min, max } = trophyBounds();
+  const now = new Date();
+  let streak = 0, bestStreak = 0;
+  const streakAt = {};
+  const bonusDates = [];
+  const sessionHits = [];
+  eachDayKey(min, max, (k) => {
+    if (isDayChecked(k)) {
+      streak++;
+      if (streak > bestStreak) bestStreak = streak;
+      for (const t of [7, 30, 100, 365]) if (streak === t && !streakAt[t]) streakAt[t] = k;
+      sessionHits.push(k);
+    } else streak = 0;
+    if (isBonus(k)) {
+      bonusDates.push(k);
+      sessionHits.push(k);
+    }
+  });
+  let bestWeekMain = 0, bestWeekSum = 0, perfectWeek = null, doubleWeek = null;
+  let monday = mondayOf(parseKey(min));
+  const lastMonday = mondayOf(parseKey(max));
+  while (monday <= lastMonday) {
+    const p = weekParts(monday);
+    if (p.main > bestWeekMain) bestWeekMain = p.main;
+    if (p.main + p.bonus > bestWeekSum) bestWeekSum = p.main + p.bonus;
+    const sunday = dkey(addDays(monday, 6));
+    if (p.main === 7 && !perfectWeek) perfectWeek = sunday;
+    if (p.main === 7 && p.bonus === 7 && !doubleWeek) doubleWeek = sunday;
+    monday = addDays(monday, 7);
+  }
+  let bestMonth = { checked: 0, dim: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() };
+  const completeMonths = [];
+  let cursor = new Date(parseKey(min).getFullYear(), parseKey(min).getMonth(), 1);
+  const endM = parseKey(max);
+  while (cursor.getFullYear() < endM.getFullYear() || (cursor.getFullYear() === endM.getFullYear() && cursor.getMonth() <= endM.getMonth())) {
+    const y = cursor.getFullYear(), m = cursor.getMonth();
+    const dim = new Date(y, m + 1, 0).getDate();
+    let checked = 0;
+    for (let day = 1; day <= dim; day++) if (isDayChecked(dkey(new Date(y, m, day)))) checked++;
+    const monthEnd = dkey(new Date(y, m, dim));
+    if (checked === dim && monthEnd <= max) completeMonths.push(monthEnd);
+    if (checked / dim > bestMonth.checked / bestMonth.dim) bestMonth = { checked, dim };
+    cursor = new Date(y, m + 1, 1);
+  }
+  const reps = pushRepsPerSession();
+  return {
+    bestStreak, streakAt, bestWeekMain, bestWeekSum, perfectWeek, doubleWeek,
+    bestMonth, completeMonths, bonusDates, sessionHits, reps,
+    pompes: sessionHits.length * reps
+  };
+}
+function fmtTrophyDate(k) {
+  return parseKey(k).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function fmtInt(n) { return Math.round(n).toLocaleString('fr-FR'); }
+function trophyBoard() {
+  const f = trophyFacts();
+  const hit = (list, n) => (list.length >= n ? list[n - 1] : null);
+  const pompeDate = (target) => (f.reps > 0 ? hit(f.sessionHits, Math.ceil(target / f.reps)) : null);
+  const defs = [
+    { id: 'streak-7', group: 'Régularité', name: 'Recrue', desc: '7 jours cochés d’affilée.', unlocked: f.bestStreak >= 7, date: f.streakAt[7] || null, progress: `${f.bestStreak} / 7 jours` },
+    { id: 'streak-30', group: 'Régularité', name: 'Camarade discipliné', desc: '30 jours cochés d’affilée.', unlocked: f.bestStreak >= 30, date: f.streakAt[30] || null, progress: `${f.bestStreak} / 30 jours` },
+    { id: 'streak-100', group: 'Régularité', name: 'Héros du Travail', desc: '100 jours cochés d’affilée.', unlocked: f.bestStreak >= 100, date: f.streakAt[100] || null, progress: `${f.bestStreak} / 100 jours` },
+    { id: 'streak-365', group: 'Régularité', name: 'Ordre de Lénine', desc: '365 jours cochés d’affilée.', unlocked: f.bestStreak >= 365, date: f.streakAt[365] || null, progress: `${f.bestStreak} / 365 jours` },
+    { id: 'week-perfect', group: 'Semaines', name: 'Semaine parfaite', desc: 'Les 7 jours d’une semaine cochés.', unlocked: !!f.perfectWeek, date: f.perfectWeek, progress: `${f.bestWeekMain} / 7 jours` },
+    { id: 'week-double', group: 'Semaines', name: 'Semaine double', desc: '7 jours cochés et 7 bonus la même semaine.', unlocked: !!f.doubleWeek, date: f.doubleWeek, progress: `${Math.min(f.bestWeekSum, 14)} / 14` },
+    { id: 'month-full', group: 'Mois', name: 'Mois complet', desc: 'Tous les jours d’un mois cochés.', unlocked: f.completeMonths.length >= 1, date: f.completeMonths[0] || null, progress: `${f.bestMonth.checked} / ${f.bestMonth.dim} jours` },
+    { id: 'month-5', group: 'Mois', name: 'Plan quinquennal', desc: 'Cinq mois complets, d’affilée ou non.', unlocked: f.completeMonths.length >= 5, date: f.completeMonths[4] || null, progress: `${f.completeMonths.length} / 5 mois` },
+    { id: 'bonus-1', group: 'Bonus', name: 'Premier bonus', desc: 'La première séance bonus.', unlocked: f.bonusDates.length >= 1, date: hit(f.bonusDates, 1), progress: `${f.bonusDates.length} / 1 bonus` },
+    { id: 'bonus-10', group: 'Bonus', name: 'Stakhanoviste', desc: 'Dix séances bonus.', unlocked: f.bonusDates.length >= 10, date: hit(f.bonusDates, 10), progress: `${f.bonusDates.length} / 10 bonus` },
+    { id: 'bonus-50', group: 'Bonus', name: 'Stakhanoviste d’or', desc: 'Cinquante séances bonus.', unlocked: f.bonusDates.length >= 50, date: hit(f.bonusDates, 50), progress: `${f.bonusDates.length} / 50 bonus` },
+    { id: 'sessions-50', group: 'Séances', name: '50 séances', desc: 'Cinquante séances, bonus compris.', unlocked: f.sessionHits.length >= 50, date: hit(f.sessionHits, 50), progress: `${f.sessionHits.length} / 50 séances` },
+    { id: 'sessions-100', group: 'Séances', name: '100 séances', desc: 'Cent séances au compteur.', unlocked: f.sessionHits.length >= 100, date: hit(f.sessionHits, 100), progress: `${f.sessionHits.length} / 100 séances` },
+    { id: 'sessions-250', group: 'Séances', name: '250 séances', desc: 'Deux cent cinquante séances.', unlocked: f.sessionHits.length >= 250, date: hit(f.sessionHits, 250), progress: `${f.sessionHits.length} / 250 séances` },
+    { id: 'sessions-500', group: 'Séances', name: '500 séances', desc: 'Cinq cents séances.', unlocked: f.sessionHits.length >= 500, date: hit(f.sessionHits, 500), progress: `${f.sessionHits.length} / 500 séances` },
+    { id: 'push-1000', group: 'Pompes', name: '1 000 pompes', desc: 'Estimation : séances × pompes du programme.', unlocked: f.pompes >= 1000, date: pompeDate(1000), progress: `${fmtInt(f.pompes)} / ${fmtInt(1000)} (estimation)` },
+    { id: 'push-10000', group: 'Pompes', name: '10 000 pompes', desc: 'Estimation d’après le programme actuel.', unlocked: f.pompes >= 10000, date: pompeDate(10000), progress: `${fmtInt(f.pompes)} / ${fmtInt(10000)} (estimation)` },
+    { id: 'push-50000', group: 'Pompes', name: '50 000 pompes', desc: 'Estimation. Le programme actuel sert de base.', unlocked: f.pompes >= 50000, date: pompeDate(50000), progress: `${fmtInt(f.pompes)} / ${fmtInt(50000)} (estimation)` }
+  ];
+  return defs;
+}
+function unseenTrophies() {
+  const seen = new Set(seenList(state.seenTrophies));
+  return trophyBoard().filter((t) => t.unlocked && !seen.has(t.id));
+}
+function maybeShowTrophyOverlay() {
+  const el = document.getElementById('trophy-overlay');
+  if (!el || !el.classList.contains('hidden')) return;
+  const fresh = unseenTrophies();
+  if (!fresh.length) return;
+  const many = fresh.length > 1;
+  const title = many ? 'Nouveaux trophées' : fresh[0].name;
+  const body = many
+    ? `<ul>${fresh.map((t) => `<li>${esc(t.name)}</li>`).join('')}</ul>`
+    : `<p class="muted">${esc(fresh[0].desc)}</p>`;
+  el.innerHTML = `<div class="trophy-pop">
+    <img src="images/etoile-kremlin.png" alt="" width="140" height="140">
+    <h2>${esc(title)}</h2>
+    ${body}
+    <button class="btn primary" type="button" data-action="close-trophies">Continuer</button>
+  </div>`;
+  el.dataset.ids = fresh.map((t) => t.id).join(',');
+  el.classList.remove('hidden');
+  el.setAttribute('aria-label', title);
+  const btn = el.querySelector('button');
+  if (btn) btn.focus();
+}
+function dismissTrophyOverlay() {
+  const el = document.getElementById('trophy-overlay');
+  if (!el || el.classList.contains('hidden')) return;
+  const ids = (el.dataset.ids || '').split(',').filter(Boolean);
+  const seen = seenList(state.seenTrophies);
+  for (const id of ids) if (!seen.includes(id)) seen.push(id);
+  state.seenTrophies = seen;
+  el.classList.add('hidden');
+  el.innerHTML = '';
+  delete el.dataset.ids;
+  save();
+}
+
 /* =========================================================================
    Écrans
    ========================================================================= */
-const TABS = ['accueil', 'semaine', 'calories', 'programme'];
+const TABS = ['accueil', 'semaine', 'calories', 'programme', 'trophees'];
 function currentTab() { const h = location.hash.replace('#', ''); return TABS.includes(h) ? h : 'accueil'; }
 
 function render() {
   const tab = currentTab();
-  document.body.classList.remove('home', 'semaine', 'calories', 'programme');
+  document.body.classList.remove('home', 'semaine', 'calories', 'programme', 'trophees');
   document.body.classList.add(tab === 'accueil' ? 'home' : tab);
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   const app = document.getElementById('app');
-  app.innerHTML = ({ accueil: viewHome, semaine: viewWeek, calories: viewCalories, programme: viewProgram })[tab]();
+  app.innerHTML = ({ accueil: viewHome, semaine: viewWeek, calories: viewCalories, programme: viewProgram, trophees: viewTrophees })[tab]();
+  maybeShowTrophyOverlay();
 }
 
 /* ----- 1. Accueil ----- */
@@ -591,6 +747,32 @@ function viewProgram() {
   return h;
 }
 
+/* ----- 5. Trophées ----- */
+function viewTrophees() {
+  const items = trophyBoard();
+  const got = items.filter((t) => t.unlocked).length;
+  let h = `<h2 class="screen-title">Trophées</h2>
+  <p class="trophy-score">${got} / ${items.length}</p>`;
+  let group = '';
+  for (const t of items) {
+    if (t.group !== group) {
+      if (group) h += `</div>`;
+      group = t.group;
+      h += `<h3 class="trophy-group">${esc(group)}</h3><div class="trophy-grid">`;
+    }
+    const when = t.unlocked && t.date ? `Obtenu le ${fmtTrophyDate(t.date)}` : (t.unlocked ? 'Obtenu' : t.progress);
+    h += `<article class="trophy ${t.unlocked ? 'unlocked' : 'locked'}">
+      <img src="images/etoile-kremlin.png" alt="" width="72" height="72" class="${t.unlocked ? 'on' : 'off'}">
+      <div class="trophy-name">${esc(t.name)}</div>
+      <p class="trophy-desc">${esc(t.desc)}</p>
+      <div class="trophy-progress">${esc(when)}</div>
+    </article>`;
+  }
+  if (group) h += `</div>`;
+  h += `<p class="muted small" style="text-align:center">Calculé à partir des jours cochés, des bonus et des séances. Les pompes sont une estimation.</p>`;
+  return h;
+}
+
 /* ----- Feuille d'édition d'un exercice ----- */
 let draft = null;
 function openEditor(id) {
@@ -720,6 +902,7 @@ function importData(file) {
 }
 
 document.addEventListener('click', (ev) => {
+  if (ev.target.id === 'trophy-overlay') { dismissTrophyOverlay(); return; }
   const tabBtn = ev.target.closest('.tab');
   if (tabBtn) { location.hash = tabBtn.dataset.tab; window.scrollTo(0, 0); return; }
   const sheet = document.getElementById('sheet');
@@ -728,6 +911,7 @@ document.addEventListener('click', (ev) => {
   if (!el || el.disabled) return;
   const id = el.dataset.id;
   switch (el.dataset.action) {
+    case 'close-trophies': dismissTrophyOverlay(); break;
     case 'start': ensureToday().started = true; save(); render(); break;
     case 'toggle-ex': {
       const t = ensureToday();
@@ -856,6 +1040,7 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('keydown', (ev) => {
   if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('[role=checkbox]')) { ev.preventDefault(); ev.target.click(); }
   if (ev.key === 'Escape' && draft) closeSheet();
+  if (ev.key === 'Escape') dismissTrophyOverlay();
 });
 document.addEventListener('input', (ev) => {
   if (ev.target.id === 'weight') {

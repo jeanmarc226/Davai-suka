@@ -29,11 +29,13 @@ html { background: var(--bg); }
 body.home,
 body.semaine,
 body.calories,
-body.programme { background: transparent; }
+body.programme,
+body.trophees { background: transparent; }
 body.home::before,
 body.semaine::before,
 body.calories::before,
-body.programme::before {
+body.programme::before,
+body.trophees::before {
   content: "";
   position: fixed;
   z-index: -1;
@@ -53,10 +55,12 @@ body.home { --poster: url("./images/fond-urss.jpg"); }
 body.semaine { --poster: url("./images/fond-semaine.jpg"); }
 body.calories { --poster: url("./images/fond-calories.jpg"); }
 body.programme { --poster: url("./images/fond-programme.jpg"); }
+body.trophees { --poster: url("./images/fond-urss.jpg"); }
 body.home .hero,
 body.semaine .screen-title,
 body.calories .screen-title,
-body.programme .screen-title { padding-top: 18vw; }
+body.programme .screen-title,
+body.trophees .screen-title { padding-top: 18vw; }
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 16px; line-height: 1.4;
@@ -93,7 +97,8 @@ body.home .motto { color: #e4e8ee; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85); }
 h2.screen-title { font-size: 28px; font-weight: 800; margin: 8px 4px 16px; letter-spacing: -0.5px; }
 body.semaine .screen-title,
 body.calories .screen-title,
-body.programme .screen-title {
+body.programme .screen-title,
+body.trophees .screen-title {
   margin-top: 0;
   color: #f2f5f8;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65), 0 0 16px rgba(0, 0, 0, 0.55);
@@ -302,16 +307,17 @@ textarea { min-height: 70px; resize: vertical; }
 /* --- Barre d'onglets --- */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   height: calc(var(--tabbar-h) + var(--safe-b)); padding-bottom: var(--safe-b);
   background: rgba(15,18,24,.94); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--line);
 }
 .tab {
   border: 0; background: transparent; color: var(--muted); display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 3px; font-size: 12px; font-weight: 700;
+  align-items: center; justify-content: center; gap: 2px; font-size: 10px; font-weight: 700;
+  padding: 0 1px; line-height: 1.1;
 }
-.tab .ico { font-size: 22px; filter: grayscale(1) opacity(.6); transition: filter .15s; }
+.tab .ico { font-size: 18px; filter: grayscale(1) opacity(.6); transition: filter .15s; }
 .tab.active { color: var(--accent); }
 .tab.active .ico { filter: none; }
 
@@ -322,3 +328,47 @@ textarea { min-height: 70px; resize: vertical; }
   max-width: 90vw; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.4);
 }
 .hidden { display: none !important; }
+
+/* --- Trophées --- */
+.trophy-score { text-align: center; font-weight: 800; color: var(--orange); margin: -6px 0 8px; }
+.trophy-group { margin: 14px 4px 8px; font-size: 13px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
+.trophy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.trophy {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 8px 10px; text-align: center;
+}
+.trophy.unlocked { border-color: rgba(225, 6, 0, .5); }
+.trophy img { width: 72px; height: 72px; object-fit: contain; }
+.trophy img.off { filter: grayscale(1) brightness(.55); }
+.trophy img.on { filter: drop-shadow(0 0 10px rgba(225, 6, 0, .9)); }
+.trophy-name { font-weight: 800; font-size: 14px; margin-top: 6px; }
+.trophy-desc { color: var(--muted); font-size: 12px; margin: 4px 0 0; line-height: 1.3; }
+.trophy-progress { font-weight: 800; font-size: 12px; margin-top: 8px; color: var(--accent); }
+.trophy.locked .trophy-progress { color: var(--muted); }
+.trophy-overlay {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(8, 10, 14, .88);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.trophy-pop {
+  width: min(100%, 360px); text-align: center;
+  background: var(--card); border: 1px solid rgba(225, 6, 0, .5);
+  border-radius: 20px; padding: 22px 18px 16px;
+}
+.trophy-pop img {
+  width: 140px; height: 140px; object-fit: contain;
+  animation: trophy-pop .8s cubic-bezier(.2, 1.3, .4, 1) both;
+  filter: drop-shadow(0 0 16px rgba(225, 6, 0, .9));
+}
+@keyframes trophy-pop {
+  0% { transform: scale(.15) rotate(-18deg); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+.trophy-pop h2 { margin: 10px 0 6px; font-size: 22px; }
+.trophy-pop ul { list-style: none; padding: 0; margin: 8px 0 14px; text-align: left; max-height: 42vh; overflow: auto; }
+.trophy-pop li { padding: 8px 0; border-bottom: 1px solid var(--line); font-weight: 800; }
+.trophy-pop li:last-child { border-bottom: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .trophy-pop img { animation: none; }
+}
