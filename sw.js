@@ -1,6 +1,6 @@
 // Service worker : mise en cache pour fonctionner hors ligne.
 // Pensez à changer CACHE_VERSION à chaque mise à jour des fichiers.
-const CACHE_VERSION = 'davai-suka-v16';
+const CACHE_VERSION = 'davai-suka-v17';
 const ASSETS = [
   './',
   './index.html',

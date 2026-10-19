@@ -598,7 +598,8 @@ function exerciseChecklist(checked, action) {
     const on = checked.includes(e.id);
     html += `<li class="ex-item ${on ? 'done' : ''}" data-action="${action}" data-id="${e.id}" role="checkbox" aria-checked="${on}" tabindex="0">
       <span class="check">✓</span>
-      <div><div class="ex-name">${esc(e.name)}</div>${e.note ? `<div class="ex-meta">${esc(e.note)}</div>` : ''}</div>
+      <div class="ex-copy"><div class="ex-name">${esc(e.name)}</div>${e.note ? `<div class="ex-meta">${esc(e.note)}</div>` : ''}</div>
+      ${timerExButton(e)}
       <span class="ex-val">${esc(fmtVal(e))}</span>
     </li>`;
   }
@@ -790,6 +791,7 @@ function viewProgram() {
         <div class="ex-name">${pause ? '— Pause —' : esc(e.name)}</div>
         ${pause ? '' : `<div class="ex-val">${esc(fmtVal(e))}</div>${e.note ? `<div class="ex-meta">${esc(e.note)}</div>` : ''}`}
       </div>
+      ${pause ? '' : timerExButton(e)}
       ${pause ? '' : `<button class="icon-btn" data-action="edit" data-id="${e.id}" aria-label="Modifier">✎</button>`}
       <button class="icon-btn del" data-action="delete" data-id="${e.id}" aria-label="Supprimer">✕</button>
     </div>`;
@@ -912,6 +914,432 @@ function readDraftInputs() {
 function closeSheet() { draft = null; const s = document.getElementById('sheet'); s.classList.add('hidden'); s.innerHTML = ''; }
 
 /* =========================================================================
+   Minuteur Planche / Hanging
+   Réglages et course : uniquement davaisuka.timer.v1.
+   N’écrit jamais dans les séances, les jours, ni les trophées.
+   ========================================================================= */
+const TIMER_KEY = 'davaisuka.timer.v1';
+const TIMER_COUNTDOWN_MS = 3000;
+const TIMER_MIN_SEC = 15;
+const TIMER_MAX_SEC = 3600;
+const TIMER_LABEL = { planche: 'Planche', hanging: 'Hanging' };
+const TIMER_DONE_TEXT = 'Terminé ! Devoir accompli, camarade.';
+const TIMER_READY_TEXT = 'Prêt… Davai !';
+
+let timer = null;
+let timerScreenOn = false;
+let timerAudioCtx = null;
+let timerUiKey = '';
+let timerAlarming = false;
+
+function timerBlank() {
+  return {
+    durations: { planche: 120, hanging: 60 },
+    selected: 'planche',
+    phase: 'idle',
+    endAt: null,
+    remainingMs: null,
+    pausedFrom: null,
+    alarmed: false
+  };
+}
+function clampTimerSec(sec, fallback) {
+  const n = Math.round(Number(sec));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(TIMER_MAX_SEC, Math.max(TIMER_MIN_SEC, n));
+}
+function loadTimer() {
+  const t = timerBlank();
+  try {
+    const raw = localStorage.getItem(TIMER_KEY);
+    if (!raw) return t;
+    const d = JSON.parse(raw);
+    if (!d || typeof d !== 'object' || Array.isArray(d)) return t;
+    if (d.durations && typeof d.durations === 'object') {
+      t.durations.planche = clampTimerSec(d.durations.planche, 120);
+      t.durations.hanging = clampTimerSec(d.durations.hanging, 60);
+    }
+    if (d.selected === 'hanging') t.selected = 'hanging';
+    if (['idle', 'countdown', 'running', 'paused', 'done'].includes(d.phase)) t.phase = d.phase;
+    if (Number.isFinite(d.endAt)) t.endAt = d.endAt;
+    if (Number.isFinite(d.remainingMs)) t.remainingMs = d.remainingMs;
+    if (d.pausedFrom === 'countdown' || d.pausedFrom === 'running') t.pausedFrom = d.pausedFrom;
+    t.alarmed = d.alarmed === true;
+  } catch (e) { return timerBlank(); }
+  if ((t.phase === 'countdown' || t.phase === 'running') && !Number.isFinite(t.endAt)) t.phase = 'idle';
+  if (t.phase === 'paused' && !Number.isFinite(t.remainingMs)) t.phase = 'idle';
+  return t;
+}
+function saveTimer() {
+  try { localStorage.setItem(TIMER_KEY, JSON.stringify(timer)); }
+  catch (e) { /* le minuteur reste utilisable même si le stockage refuse */ }
+}
+function timerKindFor(ex) {
+  if (!ex || ex.kind === 'pause') return null;
+  const n = normalize(ex.name);
+  if (n.includes('planche') || n.includes('plank') || n.includes('gainage')) return 'planche';
+  if (n.includes('hanging') || n.includes('suspension') || n.includes('barre')) return 'hanging';
+  return null;
+}
+function timerExButton(ex) {
+  const kind = timerKindFor(ex);
+  if (!kind) return '';
+  return `<button type="button" class="timer-ex" data-action="timer-open" data-kind="${kind}" aria-label="Minuteur ${TIMER_LABEL[kind]}">⏱</button>`;
+}
+function timerBusy() {
+  return timer.phase === 'countdown' || timer.phase === 'running' || timer.phase === 'paused';
+}
+function timerDisplayMs() {
+  const now = Date.now();
+  if ((timer.phase === 'countdown' || timer.phase === 'running') && Number.isFinite(timer.endAt)) {
+    return Math.max(0, timer.endAt - now);
+  }
+  if (timer.phase === 'paused') return Math.max(0, timer.remainingMs || 0);
+  if (timer.phase === 'done') return 0;
+  return (timer.durations[timer.selected] || 0) * 1000;
+}
+function formatTimer(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+function timerScreenClock() {
+  if (timer.phase === 'countdown') return String(Math.max(1, Math.ceil(timerDisplayMs() / 1000)));
+  return formatTimer(timerDisplayMs());
+}
+function timerUnlockAudio() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!timerAudioCtx) timerAudioCtx = new Ctx();
+    if (timerAudioCtx.state === 'suspended') timerAudioCtx.resume();
+  } catch (e) {}
+}
+function timerBeep(ctx) {
+  const now = ctx.currentTime;
+  [523.25, 659.25, 783.99].forEach((freq, i) => {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'square';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.06, now + i * 0.16 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.16 + 0.15);
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start(now + i * 0.16);
+    o.stop(now + i * 0.16 + 0.16);
+  });
+}
+function timerAlarm() {
+  if (!timer || timer.alarmed || timerAlarming) return;
+  timerAlarming = true;
+  try { if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]); } catch (e) {}
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) { timer.alarmed = true; timerAlarming = false; saveTimer(); return; }
+    if (!timerAudioCtx) timerAudioCtx = new Ctx();
+    const go = () => {
+      try { timerBeep(timerAudioCtx); } catch (e) {}
+      timer.alarmed = true;
+      timerAlarming = false;
+      saveTimer();
+    };
+    if (timerAudioCtx.state === 'suspended') {
+      timerAudioCtx.resume().then(go).catch(() => { timerAlarming = false; });
+      return;
+    }
+    go();
+  } catch (e) { timerAlarming = false; }
+}
+let timerWakeSentinel = null;
+function timerWake(active) {
+  try {
+    if (!navigator.wakeLock) return;
+    if (!active) {
+      if (timerWakeSentinel) {
+        const s = timerWakeSentinel;
+        timerWakeSentinel = null;
+        s.release().catch(() => {});
+      }
+      return;
+    }
+    if (timerWakeSentinel) return;
+    navigator.wakeLock.request('screen').then((sentinel) => {
+      timerWakeSentinel = sentinel;
+      sentinel.addEventListener('release', () => {
+        if (timerWakeSentinel === sentinel) timerWakeSentinel = null;
+      });
+    }).catch(() => {});
+  } catch (e) {}
+}
+function timerCatchUp() {
+  if (!timer) return;
+  const now = Date.now();
+  if (timer.phase === 'countdown' && Number.isFinite(timer.endAt) && now >= timer.endAt) {
+    timer.phase = 'running';
+    timer.endAt = timer.endAt + (timer.durations[timer.selected] || 0) * 1000;
+    timer.pausedFrom = null;
+    saveTimer();
+  }
+  if (timer.phase === 'running' && Number.isFinite(timer.endAt) && now >= timer.endAt) {
+    timer.phase = 'done';
+    timer.endAt = null;
+    timer.remainingMs = 0;
+    timer.pausedFrom = null;
+    saveTimer();
+    timerWake(false);
+    timerAlarm();
+  }
+}
+function timerStart() {
+  timer.phase = 'countdown';
+  timer.endAt = Date.now() + TIMER_COUNTDOWN_MS;
+  timer.remainingMs = null;
+  timer.pausedFrom = null;
+  timer.alarmed = false;
+  saveTimer();
+  timerUnlockAudio();
+  timerWake(true);
+  timerPaint(true);
+}
+function timerPause() {
+  if (timer.phase !== 'countdown' && timer.phase !== 'running') return;
+  timer.pausedFrom = timer.phase;
+  timer.remainingMs = Math.max(0, (timer.endAt || Date.now()) - Date.now());
+  timer.phase = 'paused';
+  timer.endAt = null;
+  saveTimer();
+  timerWake(false);
+  timerPaint(true);
+}
+function timerResume() {
+  if (timer.phase !== 'paused') return;
+  timer.phase = timer.pausedFrom === 'countdown' ? 'countdown' : 'running';
+  timer.endAt = Date.now() + Math.max(0, timer.remainingMs || 0);
+  timer.remainingMs = null;
+  saveTimer();
+  timerWake(true);
+  timerCatchUp();
+  timerPaint(true);
+}
+function timerReset() {
+  timer.phase = 'idle';
+  timer.endAt = null;
+  timer.remainingMs = null;
+  timer.pausedFrom = null;
+  timer.alarmed = false;
+  saveTimer();
+  timerWake(false);
+  timerPaint(true);
+}
+function timerPick(kind) {
+  if (kind !== 'planche' && kind !== 'hanging') return;
+  if (timerBusy()) return;
+  if (timer.phase === 'done') {
+    timer.phase = 'idle';
+    timer.alarmed = false;
+    timer.endAt = null;
+    timer.remainingMs = null;
+  }
+  timer.selected = kind;
+  saveTimer();
+  timerPaint(true);
+}
+function timerStep(delta) {
+  if (timerBusy()) return;
+  if (timer.phase === 'done') {
+    timer.phase = 'idle';
+    timer.alarmed = false;
+  }
+  timer.durations[timer.selected] = clampTimerSec((timer.durations[timer.selected] || 0) + delta, timer.durations[timer.selected]);
+  saveTimer();
+  timerPaint(true);
+}
+function timerCommitDuration() {
+  if (!timer || timerBusy()) return;
+  const minEl = document.getElementById('timer-min');
+  const secEl = document.getElementById('timer-sec');
+  if (!minEl || !secEl) return;
+  if (timer.phase === 'done') {
+    timer.phase = 'idle';
+    timer.alarmed = false;
+  }
+  timer.durations[timer.selected] = clampTimerSec((Number(minEl.value) || 0) * 60 + (Number(secEl.value) || 0), timer.durations[timer.selected]);
+  saveTimer();
+  timerPaint(true);
+}
+function timerOpenScreen(kind) {
+  if (kind === 'planche' || kind === 'hanging') {
+    if (!timerBusy()) {
+      if (timer.phase === 'done' && kind !== timer.selected) {
+        timer.phase = 'idle';
+        timer.alarmed = false;
+        timer.endAt = null;
+        timer.remainingMs = null;
+      }
+      timer.selected = kind;
+      saveTimer();
+    }
+  }
+  timerScreenOn = true;
+  timerPaint(true);
+}
+function timerMount() {
+  const layer = document.getElementById('timer-layer');
+  if (!layer || layer.childElementCount) return;
+  layer.innerHTML = `
+    <button type="button" id="timer-fab" class="timer-fab" data-action="timer-open">Minuteur</button>
+    <div id="timer-bar" class="timer-bar hidden">
+      <button type="button" class="timer-bar-main" data-action="timer-open">
+        <span id="timer-bar-name"></span>
+        <span id="timer-bar-time"></span>
+      </button>
+      <button type="button" class="timer-bar-btn" id="timer-bar-toggle" data-action="timer-pause">Pause</button>
+    </div>
+    <section id="timer-screen" class="timer-screen hidden" aria-label="Minuteur">
+      <button type="button" class="timer-close" data-action="timer-close">Fermer</button>
+      <h2>Minuteur</h2>
+      <div class="timer-picks">
+        <button type="button" id="timer-pick-planche" data-action="timer-pick" data-kind="planche">Planche</button>
+        <button type="button" id="timer-pick-hanging" data-action="timer-pick" data-kind="hanging">Hanging</button>
+      </div>
+      <p id="timer-phrase" class="timer-phrase hidden" aria-live="polite"></p>
+      <div id="timer-clock" class="timer-clock">2:00</div>
+      <p id="timer-done" class="timer-done hidden" aria-live="polite">${TIMER_DONE_TEXT}</p>
+      <div id="timer-dur" class="timer-dur">
+        <span class="timer-dur-label">Durée</span>
+        <button type="button" data-action="timer-step" data-d="-15" aria-label="Retirer 15 secondes">−15 s</button>
+        <input id="timer-min" type="number" inputmode="numeric" min="0" max="60" aria-label="Minutes" autocomplete="off">
+        <span class="timer-colon" aria-hidden="true">:</span>
+        <input id="timer-sec" type="number" inputmode="numeric" min="0" max="59" aria-label="Secondes" autocomplete="off">
+        <button type="button" data-action="timer-step" data-d="15" aria-label="Ajouter 15 secondes">+15 s</button>
+      </div>
+      <button type="button" id="timer-start" class="btn timer-go" data-action="timer-start">Démarrer</button>
+      <button type="button" id="timer-pause" class="btn timer-go" data-action="timer-pause">Pause</button>
+      <button type="button" id="timer-resume" class="btn timer-go" data-action="timer-resume">Reprendre</button>
+      <button type="button" id="timer-reset" class="btn timer-stop" data-action="timer-reset">Réinitialiser</button>
+      <p class="timer-note">Ce minuteur n’enregistre aucune séance.</p>
+    </section>`;
+}
+function timerSyncInputs() {
+  const minEl = document.getElementById('timer-min');
+  const secEl = document.getElementById('timer-sec');
+  if (!minEl || !secEl) return;
+  if (document.activeElement === minEl || document.activeElement === secEl) return;
+  const total = timer.durations[timer.selected] || 0;
+  minEl.value = String(Math.floor(total / 60));
+  secEl.value = String(total % 60);
+}
+function timerPaint(full) {
+  if (!timer) return;
+  timerCatchUp();
+  const bar = document.getElementById('timer-bar');
+  const fab = document.getElementById('timer-fab');
+  const screen = document.getElementById('timer-screen');
+  if (!bar || !fab || !screen) return;
+  const live = timer.phase === 'countdown' || timer.phase === 'running' || timer.phase === 'paused' || timer.phase === 'done';
+  bar.classList.toggle('hidden', !live || timerScreenOn);
+  fab.classList.toggle('hidden', live || timerScreenOn);
+  screen.classList.toggle('hidden', !timerScreenOn);
+  document.body.classList.toggle('timer-live', live && !timerScreenOn);
+
+  const clock = document.getElementById('timer-clock');
+  if (clock) {
+    clock.textContent = timerScreenClock();
+    clock.classList.toggle('countdown', timer.phase === 'countdown');
+  }
+  const phrase = document.getElementById('timer-phrase');
+  if (phrase) {
+    const show = timer.phase === 'countdown';
+    phrase.textContent = show ? TIMER_READY_TEXT : '';
+    phrase.classList.toggle('hidden', !show);
+  }
+  const done = document.getElementById('timer-done');
+  if (done) done.classList.toggle('hidden', timer.phase !== 'done');
+
+  const barName = document.getElementById('timer-bar-name');
+  const barTime = document.getElementById('timer-bar-time');
+  if (timer.phase === 'done') {
+    if (barName) barName.textContent = TIMER_DONE_TEXT;
+    if (barTime) barTime.textContent = '';
+  } else {
+    if (barName) barName.textContent = TIMER_LABEL[timer.selected] || '';
+    if (barTime) barTime.textContent = formatTimer(timerDisplayMs());
+  }
+  const toggle = document.getElementById('timer-bar-toggle');
+  if (toggle) {
+    if (timer.phase === 'paused') {
+      toggle.classList.remove('hidden');
+      toggle.dataset.action = 'timer-resume';
+      toggle.textContent = 'Reprendre';
+    } else if (timer.phase === 'countdown' || timer.phase === 'running') {
+      toggle.classList.remove('hidden');
+      toggle.dataset.action = 'timer-pause';
+      toggle.textContent = 'Pause';
+    } else {
+      toggle.classList.add('hidden');
+    }
+  }
+
+  const key = timer.phase + '|' + timer.selected + '|' + (timerScreenOn ? '1' : '0') + '|' + timer.durations.planche + '|' + timer.durations.hanging;
+  if (!full && key === timerUiKey) return;
+  timerUiKey = key;
+  const locked = timerBusy();
+  const plancheBtn = document.getElementById('timer-pick-planche');
+  const hangingBtn = document.getElementById('timer-pick-hanging');
+  if (plancheBtn) {
+    plancheBtn.classList.toggle('on', timer.selected === 'planche');
+    plancheBtn.disabled = locked;
+    plancheBtn.setAttribute('aria-pressed', timer.selected === 'planche' ? 'true' : 'false');
+  }
+  if (hangingBtn) {
+    hangingBtn.classList.toggle('on', timer.selected === 'hanging');
+    hangingBtn.disabled = locked;
+    hangingBtn.setAttribute('aria-pressed', timer.selected === 'hanging' ? 'true' : 'false');
+  }
+  const dur = document.getElementById('timer-dur');
+  if (dur) dur.querySelectorAll('button, input').forEach((el) => { el.disabled = locked; });
+  timerSyncInputs();
+  const show = (id, on) => {
+    const node = document.getElementById(id);
+    if (node) node.classList.toggle('hidden', !on);
+  };
+  show('timer-start', timer.phase === 'idle' || timer.phase === 'done');
+  show('timer-pause', timer.phase === 'countdown' || timer.phase === 'running');
+  show('timer-resume', timer.phase === 'paused');
+  show('timer-reset', timer.phase !== 'idle');
+}
+function onTimerAction(el) {
+  const action = el.dataset.action;
+  if (action === 'timer-open') timerOpenScreen(el.dataset.kind || '');
+  else if (action === 'timer-close') { timerScreenOn = false; timerPaint(true); }
+  else if (action === 'timer-pick') timerPick(el.dataset.kind);
+  else if (action === 'timer-step') timerStep(Number(el.dataset.d) || 0);
+  else if (action === 'timer-start') timerStart();
+  else if (action === 'timer-pause') timerPause();
+  else if (action === 'timer-resume') timerResume();
+  else if (action === 'timer-reset') timerReset();
+}
+function timerInit() {
+  timer = loadTimer();
+  timerMount();
+  timerCatchUp();
+  if (timer.phase === 'done' && !timer.alarmed) timerAlarm();
+  timerWake(timer.phase === 'countdown' || timer.phase === 'running');
+  timerPaint(true);
+  setInterval(() => timerPaint(false), 200);
+}
+function timerOnVisible() {
+  if (!timer) return;
+  timerCatchUp();
+  if (timer.phase === 'countdown' || timer.phase === 'running') timerWake(true);
+  if (timer.phase === 'done' && !timer.alarmed) timerAlarm();
+  timerPaint(true);
+}
+
+/* =========================================================================
    Actions
    ========================================================================= */
 function moveItem(id, dir) {
@@ -992,6 +1420,7 @@ document.addEventListener('click', (ev) => {
   if (ev.target === sheet) { closeSheet(); return; }
   const el = ev.target.closest('[data-action]');
   if (!el || el.disabled) return;
+  if (el.dataset.action.startsWith('timer-')) { onTimerAction(el); return; }
   const id = el.dataset.id;
   switch (el.dataset.action) {
     case 'close-trophies': dismissTrophyOverlay(); break;
@@ -1122,7 +1551,8 @@ document.addEventListener('click', (ev) => {
 
 document.addEventListener('keydown', (ev) => {
   if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('[role=checkbox]')) { ev.preventDefault(); ev.target.click(); }
-  if (ev.key === 'Escape' && draft) closeSheet();
+  if (ev.key === 'Escape' && draft) { closeSheet(); return; }
+  if (ev.key === 'Escape' && timerScreenOn) { timerScreenOn = false; timerPaint(true); return; }
   if (ev.key === 'Escape') dismissTrophyOverlay();
 });
 document.addEventListener('input', (ev) => {
@@ -1139,6 +1569,7 @@ document.addEventListener('input', (ev) => {
 });
 document.addEventListener('change', (ev) => {
   if (ev.target.id === 'import-file' && ev.target.files[0]) importData(ev.target.files[0]);
+  if (ev.target.id === 'timer-min' || ev.target.id === 'timer-sec') timerCommitDuration();
   if (ev.target.id === 'jump-month' || ev.target.id === 'jump-year') {
     const y = Number(document.getElementById('jump-year').value);
     const m = Number(document.getElementById('jump-month').value);
@@ -1147,13 +1578,23 @@ document.addEventListener('change', (ev) => {
     render();
   }
 });
-window.addEventListener('hashchange', () => { closeSheet(); render(); });
+window.addEventListener('hashchange', () => {
+  closeSheet();
+  timerScreenOn = false;
+  render();
+  timerPaint(true);
+});
 // Rafraîchir quand on revient sur l'appli (ex. passage à un nouveau jour)
-document.addEventListener('visibilitychange', () => { if (!document.hidden && !draft) render(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  timerOnVisible();
+  if (!draft) render();
+});
 
 document.title = APP_NAME;
 save();
 render();
+timerInit();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   // Un seul rechargement quand le nouveau worker prend la main (évite une boucle).
