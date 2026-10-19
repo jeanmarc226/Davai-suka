@@ -609,12 +609,13 @@ function viewHome() {
   const done = sessionOn(k);
   const bonusDone = bonusSessionOn(k);
   const exs = exercises();
-  const motto = "T'as pas l'temps parce que t'es un lâche";
+  const motto = 'Dur à l’entraînement, facile au combat';
+  const mottoBy = '— Maréchal Alexandre Souvorov';
   const week = weekParts(mondayOf(now));
 
   let h = `<section class="hero">
     <h1 class="app-name" aria-label="${esc(APP_NAME)}">ДАVАЙ SUКА</h1>
-    <p class="motto">${esc(motto)}</p>
+    <p class="motto"><span class="motto-line">${esc(motto)}</span><span class="motto-by">${esc(mottoBy)}</span></p>
     <span class="date-pill">📅 ${esc(fmtLong(now))}</span>
   </section>
   <div class="stats" style="margin-top:16px">
