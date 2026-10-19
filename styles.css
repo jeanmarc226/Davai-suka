@@ -23,6 +23,27 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
+html { background: var(--bg); }
+/* Affiche derrière le haut de l'accueil uniquement. z-index -1 : le fond opaque
+   du body la cacherait, donc le body devient transparent sur l'accueil. */
+body.home { background: transparent; }
+body.home::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  top: 0;
+  /* Hauteur = ratio 16:9 : cover montre les deux figures en entier sur un téléphone. */
+  height: min(56.25vw, 420px);
+  pointer-events: none;
+  background-image:
+    linear-gradient(180deg, rgba(15, 18, 24, 0.78) 0%, rgba(15, 18, 24, 0.58) 40%, rgba(15, 18, 24, 0.86) 78%, var(--bg) 100%),
+    url("./images/fond-urss.jpg");
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center center;
+}
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 16px; line-height: 1.4;
@@ -50,6 +71,8 @@ button { cursor: pointer; }
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
 }
 .motto { color: var(--muted); margin: 8px 0 0; font-size: 17px; }
+body.home .app-name { text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65), 0 0 16px rgba(0, 0, 0, 0.55); }
+body.home .motto { color: #e4e8ee; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85); }
 .date-pill {
   display: inline-block; margin-top: 14px; padding: 6px 12px; border-radius: 999px;
   background: var(--card2); color: var(--text); font-weight: 600; font-size: 14px;
