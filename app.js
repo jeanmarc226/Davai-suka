@@ -333,7 +333,7 @@ function viewWeekGrid() {
   h += `</div>
   <div class="week-total"><div class="n" id="week-total">${n}<span> / 7</span></div>
   <div class="dots">${Array.from({ length: 7 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div>
-  <div class="muted week-motivation" style="margin-top:10px">${esc(weekMotivation(n))}</div></div>
+  <div class="muted" style="margin-top:10px">${esc(weekMotivation(n))}</div></div>
   </div>
   <p class="muted small" style="text-align:center">Touchez un jour pour le cocher / décocher. 🔥 = séance enregistrée ce jour-là.</p>`;
   return h;
