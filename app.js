@@ -580,14 +580,15 @@ function viewHome() {
 
   const nDone = exs.filter((e) => t.checked.includes(e.id)).length;
   const pct = exs.length ? Math.round((nDone / exs.length) * 100) : 0;
+  const allOn = exs.length > 0 && nDone === exs.length;
   h += `<div class="card">
     <div class="row"><h3 style="margin:0">Séance du jour</h3><div class="spacer"></div><strong id="count">${nDone} / ${exs.length}</strong></div>
+    <button type="button" class="btn check-all" data-action="${allOn ? 'uncheck-all' : 'check-all'}">${allOn ? 'Tout décocher' : 'Tout cocher'}</button>
     <div class="progress"><div style="width:${pct}%"></div></div>
     ${exerciseChecklist(t.checked, 'toggle-ex')}
   </div>
   ${musicPanelHtml()}
-  <button class="btn primary" data-action="finish">🏁 Séance terminée</button>
-  <p class="muted small" style="text-align:center">Les calories sont calculées sur les exercices cochés (tous si aucun n’est coché).</p>`;
+  <button class="btn primary" data-action="finish">🏁 Séance terminée</button>`;
   return h;
 }
 function exerciseChecklist(checked, action) {
@@ -605,10 +606,10 @@ function exerciseChecklist(checked, action) {
   return html + `</ul>`;
 }
 
-/* ----- 2. Semaine ----- */
+/* ----- 2. Calendrier ----- */
 function viewWeek() {
   const mode = ui.calMode === 'month' ? 'month' : 'week';
-  let h = `<h2 class="screen-title">Semaine</h2>
+  let h = `<h2 class="screen-title">Calendrier</h2>
   <div class="seg cal-toggle" role="group" aria-label="Affichage du calendrier">
     <button type="button" data-action="cal-mode" data-mode="week" class="${mode === 'week' ? 'on' : ''}" aria-pressed="${mode === 'week'}">Semaine</button>
     <button type="button" data-action="cal-mode" data-mode="month" class="${mode === 'month' ? 'on' : ''}" aria-pressed="${mode === 'month'}">Mois</button>
@@ -852,7 +853,7 @@ function viewTrophees() {
     </article>`;
   }
   if (group) h += `</div>`;
-  h += `<p class="muted small" style="text-align:center">Depuis le 18 octobre 2026. Les jours d’avant restent dans Semaine, Mois et Calories. Planche, suspension, tractions et pompes sont une estimation.</p>`;
+  h += `<p class="muted small" style="text-align:center">Depuis le 18 octobre 2026. Les jours d’avant restent dans Calendrier et Calories. Planche, suspension, tractions et pompes sont une estimation.</p>`;
   return h;
 }
 
@@ -1463,6 +1464,23 @@ function recordSession(k, doneList, exs, bonus) {
   state.sessions.push(entry);
   return entry.kcal;
 }
+function checkAllExercises() {
+  const t = ensureToday();
+  const checked = Array.isArray(t.checked) ? t.checked.slice() : [];
+  for (const e of exercises()) {
+    if (!checked.includes(e.id)) checked.push(e.id);
+  }
+  t.checked = checked;
+  save();
+  render();
+}
+function uncheckAllExercises() {
+  const t = ensureToday();
+  const ids = new Set(exercises().map((e) => e.id));
+  t.checked = (Array.isArray(t.checked) ? t.checked : []).filter((id) => !ids.has(id));
+  save();
+  render();
+}
 function finishSession() {
   const t = ensureToday();
   const exs = exercises();
@@ -1532,6 +1550,8 @@ document.addEventListener('click', (ev) => {
       t.checked = t.checked.includes(id) ? t.checked.filter((x) => x !== id) : [...t.checked, id];
       save(); render(); break;
     }
+    case 'check-all': checkAllExercises(); break;
+    case 'uncheck-all': uncheckAllExercises(); break;
     case 'finish': finishSession(); break;
     case 'start-bonus': {
       if (!mainSessionOn(todayKey())) return;

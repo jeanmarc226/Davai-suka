@@ -126,6 +126,16 @@ h3 { font-size: 18px; margin: 0 0 10px; }
 .btn.danger { background: transparent; border: 1px solid rgba(255,92,108,.5); color: var(--danger); font-weight: 700; min-height: 48px; }
 .btn:disabled { opacity: .45; }
 .btn + .btn { margin-top: 10px; }
+.btn.check-all {
+  margin: 4px 0 12px;
+  background: #080404;
+  color: #E10600;
+  border: 1px solid #E10600;
+  font-family: "Russo One", sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  box-shadow: none;
+}
 .icon-btn {
   width: 44px; height: 44px; min-width: 44px; border-radius: 12px; border: 1px solid var(--line);
   background: var(--card2); color: var(--text); font-size: 18px; display: inline-flex; align-items: center; justify-content: center;
