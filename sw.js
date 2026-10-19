@@ -1,6 +1,6 @@
 // Service worker : mise en cache pour fonctionner hors ligne.
 // Pensez à changer CACHE_VERSION à chaque mise à jour des fichiers.
-const CACHE_VERSION = 'davai-suka-v8';
+const CACHE_VERSION = 'davai-suka-v9';
 const ASSETS = [
   './',
   './index.html',
@@ -9,6 +9,9 @@ const ASSETS = [
   './manifest.webmanifest',
   './fonts/RussoOne-Regular.woff2',
   './images/fond-urss.jpg',
+  './images/fond-semaine.jpg',
+  './images/fond-calories.jpg',
+  './images/fond-programme.jpg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png'

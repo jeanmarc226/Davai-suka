@@ -24,27 +24,39 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
 html { background: var(--bg); }
-/* Affiche derrière le haut de l'accueil uniquement. z-index -1 : le fond opaque
-   du body la cacherait, donc le body devient transparent sur l'accueil. */
-body.home { background: transparent; }
-body.home::before {
+/* Bandeau 16:9 en haut de chaque écran. z-index -1 : le fond opaque du body
+   le cacherait, donc le body devient transparent quand une affiche est posée. */
+body.home,
+body.semaine,
+body.calories,
+body.programme { background: transparent; }
+body.home::before,
+body.semaine::before,
+body.calories::before,
+body.programme::before {
   content: "";
   position: fixed;
   z-index: -1;
   left: 0;
   right: 0;
   top: 0;
-  /* Hauteur = ratio 16:9 : cover montre les deux figures en entier sur un téléphone. */
   height: min(56.25vw, 420px);
   pointer-events: none;
   background-image:
     linear-gradient(180deg, rgba(15, 18, 24, 0.2) 0%, rgba(15, 18, 24, 0.28) 30%, rgba(15, 18, 24, 0.82) 54%, var(--bg) 100%),
-    url("./images/fond-urss.jpg");
+    var(--poster);
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center top;
 }
-body.home .hero { padding-top: 18vw; }
+body.home { --poster: url("./images/fond-urss.jpg"); }
+body.semaine { --poster: url("./images/fond-semaine.jpg"); }
+body.calories { --poster: url("./images/fond-calories.jpg"); }
+body.programme { --poster: url("./images/fond-programme.jpg"); }
+body.home .hero,
+body.semaine .screen-title,
+body.calories .screen-title,
+body.programme .screen-title { padding-top: 18vw; }
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 16px; line-height: 1.4;
@@ -79,6 +91,13 @@ body.home .motto { color: #e4e8ee; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85); }
   background: var(--card2); color: var(--text); font-weight: 600; font-size: 14px;
 }
 h2.screen-title { font-size: 28px; font-weight: 800; margin: 8px 4px 16px; letter-spacing: -0.5px; }
+body.semaine .screen-title,
+body.calories .screen-title,
+body.programme .screen-title {
+  margin-top: 0;
+  color: #f2f5f8;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65), 0 0 16px rgba(0, 0, 0, 0.55);
+}
 h3 { font-size: 18px; margin: 0 0 10px; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
