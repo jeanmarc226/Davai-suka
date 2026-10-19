@@ -571,7 +571,8 @@ textarea { min-height: 70px; resize: vertical; }
   font-family: "Russo One", sans-serif; font-weight: 400;
 }
 .home-timer-actions button:disabled { opacity: .4; }
-body.home { scroll-padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 120px); }
+html:has(body.home),
+body.home { scroll-padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 116px); }
 body.home #app { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 130px); }
 body.home .music-float { bottom: calc(var(--tabbar-h) + var(--safe-b) + 116px); }
 body.home.music-live #app { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 188px); }
