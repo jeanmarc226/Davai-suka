@@ -1,11 +1,12 @@
 // Service worker : mise en cache pour fonctionner hors ligne.
-// Pensez à changer CACHE_VERSION à chaque mise à jour des fichiers.
-const CACHE_VERSION = 'davai-suka-v22';
+// Le numéro de version est dans version.js : une seule source pour le cache et l'écran.
+importScripts('./version.js');
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './version.js',
   './manifest.webmanifest',
   './fonts/RussoOne-Regular.woff2',
   './images/fond-urss.jpg',
@@ -59,6 +60,7 @@ function isNetworkFirst(request, url) {
   return path.endsWith('/')
     || path.endsWith('.html')
     || path.endsWith('/app.js')
+    || path.endsWith('/version.js')
     || path.endsWith('/styles.css')
     || path.endsWith('.webmanifest');
 }

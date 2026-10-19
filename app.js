@@ -7,6 +7,12 @@
 // ⬇️ NOM DE L'APPLICATION : changez-le ici (et aussi dans manifest.webmanifest + <title> d'index.html)
 const APP_NAME = 'Davai Suka';
 
+function appVersionLabel() {
+  const raw = typeof CACHE_VERSION === 'string' ? CACHE_VERSION : '';
+  const m = /-v(\d+)$/.exec(raw);
+  return APP_NAME + ' — v1.' + (m ? m[1] : '0');
+}
+
 // Clé stable : ne pas la renommer, ni vider les données déjà enregistrées.
 // Toute évolution du format doit être une migration additive.
 const STORAGE_KEY = 'davaisuka.data.v1';
@@ -914,7 +920,7 @@ function formulaDetails(planKcal) {
     ['Séance actuelle', '≈ ' + fmtKcal(planKcal) + ' kcal'],
     ['Séances passées', 'Les calories de chaque séance sont figées au moment où elle est terminée']
   ];
-  return `<div class="card calc-card"><details class="calc-details">
+  return `<div class="card calc-card"><details class="calc-details fold">
     <summary>Comment c’est calculé <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
     <dl class="calc-legend">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
   </details></div>`;
@@ -983,32 +989,36 @@ function viewProgram() {
     </div>
   </div>
   <div class="card">
-    <h3>⚙️ Réglages</h3>
-    <label class="f" for="weight">Poids du corps — sert au calcul des calories</label>
-    <div class="seg" style="margin-bottom:8px">
-      <button data-action="wunit" data-unit="kg" class="${state.weightUnit === 'kg' ? 'on' : ''}">kg</button>
-      <button data-action="wunit" data-unit="lb" class="${state.weightUnit === 'lb' ? 'on' : ''}">lb</button>
-    </div>
-    <div class="weight-row">
-      <input id="weight" type="number" inputmode="decimal" step="0.1" value="${state.weightUnit === 'lb' ? kgToLb(state.weight) : state.weight}" aria-label="Poids en ${state.weightUnit}">
-      <span class="unit">${state.weightUnit}</span>
-      <button class="btn primary" data-action="save-weight">Enregistrer</button>
-    </div>
-    <p class="muted small"><strong id="weight-show">${fmtWeight(state.weight)}</strong>${state.weightSet ? '' : ' — valeur par défaut'}. Les séances déjà faites gardent leurs calories.</p>
+    <details class="fold" id="prog-settings">
+      <summary>⚙️ Réglages <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
+      <label class="f" for="weight">Poids du corps — sert au calcul des calories</label>
+      <div class="seg" style="margin-bottom:8px">
+        <button data-action="wunit" data-unit="kg" class="${state.weightUnit === 'kg' ? 'on' : ''}">kg</button>
+        <button data-action="wunit" data-unit="lb" class="${state.weightUnit === 'lb' ? 'on' : ''}">lb</button>
+      </div>
+      <div class="weight-row">
+        <input id="weight" type="number" inputmode="decimal" step="0.1" value="${state.weightUnit === 'lb' ? kgToLb(state.weight) : state.weight}" aria-label="Poids en ${state.weightUnit}">
+        <span class="unit">${state.weightUnit}</span>
+        <button class="btn primary" data-action="save-weight">Enregistrer</button>
+      </div>
+      <p class="muted small"><strong id="weight-show">${fmtWeight(state.weight)}</strong>${state.weightSet ? '' : ' — valeur par défaut'}</p>
+    </details>
   </div>
   <div class="card">
-    <h3>💾 Mes données</h3>
-    <p class="muted small" style="margin-top:0">Tout est stocké uniquement sur ce téléphone. Faites une sauvegarde de temps en temps.</p>
-    <div class="btn-row">
-      <button class="btn ghost" data-action="export">Exporter</button>
-      <button class="btn ghost" data-action="import">Importer</button>
-    </div>
-    <input id="import-file" type="file" accept="application/json,.json" class="hidden">
-    <div style="height:10px"></div>
-    <button class="btn ghost" data-action="reset-program">Remettre le programme par défaut</button>
-    <button class="btn danger" data-action="wipe">Effacer toutes les données</button>
+    <details class="fold" id="prog-data">
+      <summary>💾 Mes données <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
+      <p class="muted small" id="data-note">Données stockées uniquement sur ce téléphone. Pensez à faire une sauvegarde régulièrement.</p>
+      <div class="btn-row">
+        <button class="btn ghost" data-action="export">Exporter</button>
+        <button class="btn ghost" data-action="import">Importer</button>
+      </div>
+      <input id="import-file" type="file" accept="application/json,.json" class="hidden">
+      <div style="height:10px"></div>
+      <button class="btn ghost" data-action="reset-program">Remettre le programme par défaut</button>
+      <button class="btn danger" data-action="wipe">Effacer toutes les données</button>
+    </details>
   </div>
-  <p class="muted small" style="text-align:center">${esc(APP_NAME)} · v1</p>`;
+  <p class="muted small app-version" id="app-version">${esc(appVersionLabel())}</p>`;
   return h;
 }
 

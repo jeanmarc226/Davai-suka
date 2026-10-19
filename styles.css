@@ -344,7 +344,7 @@ h3 { font-size: 18px; margin: 0 0 10px; }
   text-align: center;
   font-size: 14px;
 }
-.calc-details > summary {
+.fold > summary {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -358,11 +358,11 @@ h3 { font-size: 18px; margin: 0 0 10px; }
   cursor: pointer;
   list-style: none;
 }
-.calc-details > summary::-webkit-details-marker { display: none; }
-.calc-details > summary::marker { content: ""; }
-.calc-details .caret.open { display: none; }
-.calc-details[open] .caret.closed { display: none; }
-.calc-details[open] .caret.open { display: inline; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::marker { content: ""; }
+.fold .caret.open { display: none; }
+.fold[open] .caret.closed { display: none; }
+.fold[open] .caret.open { display: inline; }
 .calc-legend { margin: 4px 0 0; }
 .calc-legend div {
   display: grid;
