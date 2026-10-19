@@ -181,7 +181,7 @@ function viewHome() {
   const exs = exercises();
   const planKcal = exs.reduce((a, e) => a + exKcal(e, state.weight), 0);
   const planMin = Math.max(1, Math.round(exs.reduce((a, e) => a + exSeconds(e), 0) / 60));
-  const motto = MOTTOS[(now.getDate() + now.getMonth()) % MOTTOS.length];
+  const motto = "T'as pas l'temps parce que t'es un lâche";
   const words = APP_NAME.split(' ');
   const nameHtml = words.length > 1
     ? esc(words.slice(0, -1).join(' ')) + ' <span>' + esc(words[words.length - 1]) + '</span>'
