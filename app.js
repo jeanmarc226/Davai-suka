@@ -16,7 +16,7 @@ function appVersionLabel() {
 // Clé stable : ne pas la renommer, ni vider les données déjà enregistrées.
 // Toute évolution du format doit être une migration additive.
 const STORAGE_KEY = 'davaisuka.data.v1';
-const DEFAULT_WEIGHT = 72.6; // kg (≈ 160 lb), modifiable dans Programme → Réglages
+const DEFAULT_WEIGHT = 72.6; // kg (≈ 160 lb), modifiable dans Calories → Réglages
 const KG_PER_LB = 0.45359237;
 
 const DEFAULT_PROGRAM = [
@@ -99,9 +99,10 @@ function exKcal(ex, weight) {
 /* ---------- Données ---------- */
 const TROPHY_EPOCH = '2026-10-18';
 let state = load();
-let ui = { weekOffset: 0, calMode: 'week', monthCursor: null };
+let ui = { weekOffset: 0, calMode: 'week', monthCursor: null, fold: {} };
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function foldAttr(id) { return ui.fold[id] ? ' open' : ''; }
 function freshProgram() { return DEFAULT_PROGRAM.map((e) => ({ ...e, id: uid() })); }
 
 function load() {
@@ -586,19 +587,20 @@ function dismissTrophyOverlay() {
 /* =========================================================================
    Écrans
    ========================================================================= */
-const TABS = ['accueil', 'semaine', 'calories', 'programme', 'trophees'];
+const TABS = ['accueil', 'semaine', 'calories', 'programme', 'trophees', 'donnees'];
 function currentTab() { const h = location.hash.replace('#', ''); return TABS.includes(h) ? h : 'accueil'; }
 
 function render() {
   const tab = currentTab();
-  document.body.classList.remove('home', 'semaine', 'calories', 'programme', 'trophees');
+  document.body.classList.remove('home', 'semaine', 'calories', 'programme', 'trophees', 'donnees');
   document.body.classList.add(tab === 'accueil' ? 'home' : tab);
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   const app = document.getElementById('app');
-  app.innerHTML = ({ accueil: viewHome, semaine: viewWeek, calories: viewCalories, programme: viewProgram, trophees: viewTrophees })[tab]();
+  app.innerHTML = ({ accueil: viewHome, semaine: viewWeek, calories: viewCalories, programme: viewProgram, trophees: viewTrophees, donnees: viewDonnees })[tab]();
   maybeShowTrophyOverlay();
   musicPaint();
   bindKcalChart();
+  if (timer) timerPaint(true);
 }
 
 /* ----- 1. Accueil ----- */
@@ -621,7 +623,8 @@ function viewHome() {
   <div class="stats" style="margin-top:16px">
     <div class="stat"><div class="v">${week.main}<span class="muted" style="font-size:18px"> / 7</span></div><div class="l">Cette semaine${week.bonus ? ` · ${esc(bonusNote(week.bonus))}` : ''}</div></div>
     <div class="stat"><div class="v o">${state.sessions.length}</div><div class="l">Séances au total</div></div>
-  </div>`;
+  </div>
+  ${homeTimerHtml()}`;
 
   if (done) {
     h += `<div class="done-banner">
@@ -801,8 +804,27 @@ function viewCalories() {
     <div class="stat"><div class="v">${sess.length ? fmtKcal(avg) : '–'}</div><div class="l">Moyenne / séance</div></div>
   </div>
   <div class="card kcal-card"><h3>Évolution</h3>${kcalChartHtml()}</div>
-  ${formulaDetails(planKcal)}`;
+  ${formulaDetails(planKcal)}
+  ${settingsFold()}`;
   return h;
+}
+function settingsFold() {
+  return `<div class="card">
+    <details class="fold" id="reglages"${foldAttr('reglages')}>
+      <summary>⚙️ Réglages <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
+      <label class="f" for="weight">Poids du corps — sert au calcul des calories</label>
+      <div class="seg" style="margin-bottom:8px">
+        <button data-action="wunit" data-unit="kg" class="${state.weightUnit === 'kg' ? 'on' : ''}">kg</button>
+        <button data-action="wunit" data-unit="lb" class="${state.weightUnit === 'lb' ? 'on' : ''}">lb</button>
+      </div>
+      <div class="weight-row">
+        <input id="weight" type="number" inputmode="decimal" step="0.1" value="${state.weightUnit === 'lb' ? kgToLb(state.weight) : state.weight}" aria-label="Poids en ${state.weightUnit}">
+        <span class="unit">${state.weightUnit}</span>
+        <button class="btn primary" data-action="save-weight">Enregistrer</button>
+      </div>
+      <p class="muted small"><strong id="weight-show">${fmtWeight(state.weight)}</strong>${state.weightSet ? '' : ' — valeur par défaut'}</p>
+    </details>
+  </div>`;
 }
 
 const KCAL_RANGES = ['1J', '1M', '3M', '6M', '1A', 'Tout'];
@@ -989,7 +1011,7 @@ function kcalChartHtml() {
   return h;
 }
 function formulaDetails(planKcal) {
-  const weight = fmtWeight(state.weight) + (state.weightSet ? '' : ' (valeur par défaut — modifiable dans Programme ⚙️)');
+  const weight = fmtWeight(state.weight) + (state.weightSet ? '' : ' (valeur par défaut — modifiable dans Réglages ⚙️)');
   const rows = [
     ['Formule', 'kcal = MET × poids (kg) × durée (h)'],
     ['Poids', 'Poids utilisé : ' + weight],
@@ -998,7 +1020,7 @@ function formulaDetails(planKcal) {
     ['Séance actuelle', '≈ ' + fmtKcal(planKcal) + ' kcal'],
     ['Séances passées', 'Les calories de chaque séance sont figées au moment où elle est terminée']
   ];
-  return `<div class="card calc-card"><details class="calc-details fold">
+  return `<div class="card calc-card"><details class="calc-details fold" id="calc-formula"${foldAttr('calc-formula')}>
     <summary>Comment c’est calculé <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
     <dl class="calc-legend">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
   </details></div>`;
@@ -1065,39 +1087,23 @@ function viewProgram() {
       <button class="btn primary" data-action="add">＋ Exercice</button>
       <button class="btn orange" data-action="add-pause">＋ Pause</button>
     </div>
-  </div>
+  </div>`;
+  return h;
+}
+function viewDonnees() {
+  return `<h2 class="screen-title">Données</h2>
   <div class="card">
-    <details class="fold" id="prog-settings">
-      <summary>⚙️ Réglages <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
-      <label class="f" for="weight">Poids du corps — sert au calcul des calories</label>
-      <div class="seg" style="margin-bottom:8px">
-        <button data-action="wunit" data-unit="kg" class="${state.weightUnit === 'kg' ? 'on' : ''}">kg</button>
-        <button data-action="wunit" data-unit="lb" class="${state.weightUnit === 'lb' ? 'on' : ''}">lb</button>
-      </div>
-      <div class="weight-row">
-        <input id="weight" type="number" inputmode="decimal" step="0.1" value="${state.weightUnit === 'lb' ? kgToLb(state.weight) : state.weight}" aria-label="Poids en ${state.weightUnit}">
-        <span class="unit">${state.weightUnit}</span>
-        <button class="btn primary" data-action="save-weight">Enregistrer</button>
-      </div>
-      <p class="muted small"><strong id="weight-show">${fmtWeight(state.weight)}</strong>${state.weightSet ? '' : ' — valeur par défaut'}</p>
-    </details>
-  </div>
-  <div class="card">
-    <details class="fold" id="prog-data">
-      <summary>💾 Mes données <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
-      <p class="muted small" id="data-note">Données stockées uniquement sur ce téléphone. Pensez à faire une sauvegarde régulièrement.</p>
-      <div class="btn-row">
-        <button class="btn ghost" data-action="export">Exporter</button>
-        <button class="btn ghost" data-action="import">Importer</button>
-      </div>
-      <input id="import-file" type="file" accept="application/json,.json" class="hidden">
-      <div style="height:10px"></div>
-      <button class="btn ghost" data-action="reset-program">Remettre le programme par défaut</button>
-      <button class="btn danger" data-action="wipe">Effacer toutes les données</button>
-    </details>
+    <p class="muted small" id="data-note">Données stockées uniquement sur ce téléphone. Pensez à faire une sauvegarde régulièrement.</p>
+    <div class="btn-row">
+      <button class="btn ghost" data-action="export">Exporter</button>
+      <button class="btn ghost" data-action="import">Importer</button>
+    </div>
+    <input id="import-file" type="file" accept="application/json,.json" class="hidden">
+    <div style="height:10px"></div>
+    <button class="btn ghost" data-action="reset-program">Remettre le programme par défaut</button>
+    <button class="btn danger" data-action="wipe">Effacer toutes les données</button>
   </div>
   <p class="muted small app-version" id="app-version">${esc(appVersionLabel())}</p>`;
-  return h;
 }
 
 /* ----- 5. Trophées ----- */
@@ -1197,7 +1203,6 @@ const TIMER_DONE_TEXT = 'Terminé ! Devoir accompli, camarade.';
 const TIMER_READY_TEXT = 'Prêt… Davai !';
 
 let timer = null;
-let timerScreenOn = false;
 let timerAudioCtx = null;
 let timerUiKey = '';
 let timerAlarming = false;
@@ -1254,7 +1259,7 @@ function timerKindFor(ex) {
 function timerExButton(ex) {
   const kind = timerKindFor(ex);
   if (!kind) return '';
-  return `<button type="button" class="timer-ex" data-action="timer-open" data-kind="${kind}" aria-label="Minuteur ${TIMER_LABEL[kind]}">⏱</button>`;
+  return `<button type="button" class="timer-ex" data-action="timer-pick" data-kind="${kind}" aria-label="Minuteur ${TIMER_LABEL[kind]}">⏱</button>`;
 }
 function timerBusy() {
   return timer.phase === 'countdown' || timer.phase === 'running' || timer.phase === 'paused';
@@ -1440,33 +1445,38 @@ function timerCommitDuration() {
   saveTimer();
   timerPaint(true);
 }
-function timerOpenScreen(kind) {
-  if (kind === 'planche' || kind === 'hanging') {
-    if (!timerBusy()) {
-      if (timer.phase === 'done' && kind !== timer.selected) {
-        timer.phase = 'idle';
-        timer.alarmed = false;
-        timer.endAt = null;
-        timer.remainingMs = null;
-      }
-      timer.selected = kind;
-      saveTimer();
-    }
-  }
-  timerScreenOn = true;
-  timerPaint(true);
+function homeTimerHtml() {
+  return `<div class="home-timer" id="home-timer">
+    <div class="home-timer-top">
+      <div class="timer-picks">
+        <button type="button" id="timer-pick-planche" data-action="timer-pick" data-kind="planche">Planche</button>
+        <button type="button" id="timer-pick-hanging" data-action="timer-pick" data-kind="hanging">Hanging</button>
+      </div>
+      <div id="timer-clock" class="home-timer-clock" aria-live="polite">2:00</div>
+    </div>
+    <p id="timer-phrase" class="home-timer-status hidden" aria-live="polite"></p>
+    <p id="timer-done" class="home-timer-status hidden" aria-live="polite">${TIMER_DONE_TEXT}</p>
+    <div class="home-timer-actions">
+      <div id="timer-dur">
+        <button type="button" data-action="timer-step" data-d="-15" aria-label="Retirer 15 secondes">−15 s</button>
+        <button type="button" data-action="timer-step" data-d="15" aria-label="Ajouter 15 secondes">+15 s</button>
+      </div>
+      <button type="button" id="timer-start" data-action="timer-start">Démarrer</button>
+      <button type="button" id="timer-pause" data-action="timer-pause">Pause</button>
+      <button type="button" id="timer-resume" data-action="timer-resume">Reprendre</button>
+      <button type="button" id="timer-reset" data-action="timer-reset">Réinitialiser</button>
+    </div>
+  </div>`;
 }
 function timerMount() {
   const layer = document.getElementById('timer-layer');
   if (!layer || layer.childElementCount) return;
   layer.innerHTML = `
-    <button type="button" id="timer-fab" class="timer-fab" data-action="timer-open">Minuteur</button>
-    <div id="timer-bar" class="timer-bar hidden">
-      <button type="button" class="timer-bar-main" data-action="timer-open">
+    <div id="timer-bar" class="timer-bar hidden" aria-live="polite">
+      <div class="timer-bar-main">
         <span id="timer-bar-name"></span>
         <span id="timer-bar-time"></span>
-      </button>
-      <button type="button" class="timer-bar-btn" id="timer-bar-toggle" data-action="timer-pause">Pause</button>
+      </div>
     </div>
     <audio id="music-audio" preload="none" playsinline>
       <source src="audio/playlist.ogg" type="audio/ogg">
@@ -1475,32 +1485,7 @@ function timerMount() {
     <div id="music-float" class="music-float hidden">
       <span class="music-float-name">Musique</span>
       <button type="button" id="music-float-btn" class="music-float-btn" data-action="music-pause">Pause</button>
-    </div>
-    <section id="timer-screen" class="timer-screen hidden" aria-label="Minuteur">
-      <button type="button" class="timer-close" data-action="timer-close">Fermer</button>
-      <h2>Minuteur</h2>
-      <div class="timer-picks">
-        <button type="button" id="timer-pick-planche" data-action="timer-pick" data-kind="planche">Planche</button>
-        <button type="button" id="timer-pick-hanging" data-action="timer-pick" data-kind="hanging">Hanging</button>
-      </div>
-      <p id="timer-phrase" class="timer-phrase hidden" aria-live="polite"></p>
-      <div id="timer-clock" class="timer-clock">2:00</div>
-      <p id="timer-done" class="timer-done hidden" aria-live="polite">${TIMER_DONE_TEXT}</p>
-      <div id="timer-dur" class="timer-dur">
-        <span class="timer-dur-label">Durée</span>
-        <button type="button" data-action="timer-step" data-d="-15" aria-label="Retirer 15 secondes">−15 s</button>
-        <input id="timer-min" type="number" inputmode="numeric" min="0" max="60" aria-label="Minutes" autocomplete="off">
-        <span class="timer-colon" aria-hidden="true">:</span>
-        <input id="timer-sec" type="number" inputmode="numeric" min="0" max="59" aria-label="Secondes" autocomplete="off">
-        <button type="button" data-action="timer-step" data-d="15" aria-label="Ajouter 15 secondes">+15 s</button>
-      </div>
-      <button type="button" id="timer-start" class="btn timer-go" data-action="timer-start">Démarrer</button>
-      <button type="button" id="timer-pause" class="btn timer-go" data-action="timer-pause">Pause</button>
-      <button type="button" id="timer-resume" class="btn timer-go" data-action="timer-resume">Reprendre</button>
-      <button type="button" id="timer-reset" class="btn timer-stop" data-action="timer-reset">Réinitialiser</button>
-      ${musicPanelHtml()}
-      <p class="timer-note">Ce minuteur n’enregistre aucune séance.</p>
-    </section>`;
+    </div>`;
 }
 function timerSyncInputs() {
   const minEl = document.getElementById('timer-min');
@@ -1515,14 +1500,11 @@ function timerPaint(full) {
   if (!timer) return;
   timerCatchUp();
   const bar = document.getElementById('timer-bar');
-  const fab = document.getElementById('timer-fab');
-  const screen = document.getElementById('timer-screen');
-  if (!bar || !fab || !screen) return;
-  const live = timer.phase === 'countdown' || timer.phase === 'running' || timer.phase === 'paused' || timer.phase === 'done';
-  bar.classList.toggle('hidden', !live || timerScreenOn);
-  fab.classList.add('hidden');
-  screen.classList.toggle('hidden', !timerScreenOn);
-  document.body.classList.toggle('timer-live', live && !timerScreenOn);
+  if (!bar) return;
+  const active = timer.phase === 'countdown' || timer.phase === 'running' || timer.phase === 'paused';
+  const onHome = currentTab() === 'accueil';
+  bar.classList.toggle('hidden', onHome || !active);
+  document.body.classList.toggle('timer-live', !onHome && active);
 
   const clock = document.getElementById('timer-clock');
   if (clock) {
@@ -1547,27 +1529,7 @@ function timerPaint(full) {
     if (barName) barName.textContent = TIMER_LABEL[timer.selected] || '';
     if (barTime) barTime.textContent = formatTimer(timerDisplayMs());
   }
-  const barMain = document.querySelector('.timer-bar-main');
-  if (barMain) {
-    if (currentTab() === 'accueil') barMain.dataset.action = 'timer-open';
-    else delete barMain.dataset.action;
-  }
-  const toggle = document.getElementById('timer-bar-toggle');
-  if (toggle) {
-    if (timer.phase === 'paused') {
-      toggle.classList.remove('hidden');
-      toggle.dataset.action = 'timer-resume';
-      toggle.textContent = 'Reprendre';
-    } else if (timer.phase === 'countdown' || timer.phase === 'running') {
-      toggle.classList.remove('hidden');
-      toggle.dataset.action = 'timer-pause';
-      toggle.textContent = 'Pause';
-    } else {
-      toggle.classList.add('hidden');
-    }
-  }
-
-  const key = timer.phase + '|' + timer.selected + '|' + (timerScreenOn ? '1' : '0') + '|' + timer.durations.planche + '|' + timer.durations.hanging;
+  const key = timer.phase + '|' + timer.selected + '|' + timer.durations.planche + '|' + timer.durations.hanging;
   if (!full && key === timerUiKey) return;
   timerUiKey = key;
   const locked = timerBusy();
@@ -1598,12 +1560,7 @@ function timerPaint(full) {
 }
 function onTimerAction(el) {
   const action = el.dataset.action;
-  if (action === 'timer-open') {
-    if (el.classList.contains('timer-bar-main') && currentTab() !== 'accueil') return;
-    timerOpenScreen(el.dataset.kind || '');
-  }
-  else if (action === 'timer-close') { timerScreenOn = false; timerPaint(true); }
-  else if (action === 'timer-pick') timerPick(el.dataset.kind);
+  if (action === 'timer-pick') timerPick(el.dataset.kind);
   else if (action === 'timer-step') timerStep(Number(el.dataset.d) || 0);
   else if (action === 'timer-start') timerStart();
   else if (action === 'timer-pause') timerPause();
@@ -1637,7 +1594,7 @@ function musicPanelHtml() {
   const st = musicState();
   return `<div class="music-box">
     <h3>Musique</h3>
-    <p class="music-hint">Deux morceaux enchaînés, hors ligne.</p>
+    <p class="music-hint">Zek47 - Training Songs</p>
     <div class="music-actions">
       <button type="button" class="btn music-go music-play${st === 'idle' ? '' : ' hidden'}" data-action="music-play">Musique</button>
       <button type="button" class="btn music-go music-pause${st === 'playing' ? '' : ' hidden'}" data-action="music-pause">Pause</button>
@@ -1655,7 +1612,7 @@ function musicPaint() {
   hide('.music-stop', st === 'idle');
   const float = document.getElementById('music-float');
   if (!float) return;
-  const show = st !== 'idle' && !timerScreenOn;
+  const show = st !== 'idle';
   float.classList.toggle('hidden', !show);
   document.body.classList.toggle('music-live', show);
   const btn = document.getElementById('music-float-btn');
@@ -1801,6 +1758,12 @@ function importData(file) {
   };
   r.readAsText(file);
 }
+
+document.addEventListener('toggle', (ev) => {
+  const el = ev.target;
+  if (!el || (el.id !== 'reglages' && el.id !== 'calc-formula')) return;
+  ui.fold[el.id] = !!el.open;
+}, true);
 
 document.addEventListener('click', (ev) => {
   if (ev.target.id === 'trophy-overlay') { dismissTrophyOverlay(); return; }
@@ -1952,7 +1915,6 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('keydown', (ev) => {
   if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('[role=checkbox]')) { ev.preventDefault(); ev.target.click(); }
   if (ev.key === 'Escape' && draft) { closeSheet(); return; }
-  if (ev.key === 'Escape' && timerScreenOn) { timerScreenOn = false; timerPaint(true); return; }
   if (ev.key === 'Escape') dismissTrophyOverlay();
 });
 document.addEventListener('input', (ev) => {
@@ -1980,7 +1942,6 @@ document.addEventListener('change', (ev) => {
 });
 window.addEventListener('hashchange', () => {
   closeSheet();
-  timerScreenOn = false;
   render();
   timerPaint(true);
 });

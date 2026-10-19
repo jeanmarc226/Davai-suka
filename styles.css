@@ -30,12 +30,14 @@ body.home,
 body.semaine,
 body.calories,
 body.programme,
-body.trophees { background: transparent; }
+body.trophees,
+body.donnees { background: transparent; }
 body.home::before,
 body.semaine::before,
 body.calories::before,
 body.programme::before,
-body.trophees::before {
+body.trophees::before,
+body.donnees::before {
   content: "";
   position: fixed;
   z-index: -1;
@@ -55,12 +57,14 @@ body.home { --poster: url("./images/fond-urss.jpg"); }
 body.semaine { --poster: url("./images/fond-semaine.jpg"); }
 body.calories { --poster: url("./images/fond-calories.jpg"); }
 body.programme { --poster: url("./images/fond-programme.jpg"); }
-body.trophees { --poster: url("./images/fond-urss.jpg"); }
+body.trophees { --poster: url("./images/fond-medailles.jpg"); }
+body.donnees { --poster: url("./images/fond-donnees.jpg"); }
 body.home .hero,
 body.semaine .screen-title,
 body.calories .screen-title,
 body.programme .screen-title,
-body.trophees .screen-title { padding-top: 18vw; }
+body.trophees .screen-title,
+body.donnees .screen-title { padding-top: 18vw; }
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 16px; line-height: 1.4;
@@ -101,7 +105,8 @@ h2.screen-title { font-size: 28px; font-weight: 800; margin: 8px 4px 16px; lette
 body.semaine .screen-title,
 body.calories .screen-title,
 body.programme .screen-title,
-body.trophees .screen-title {
+body.trophees .screen-title,
+body.donnees .screen-title {
   margin-top: 0;
   color: #f2f5f8;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65), 0 0 16px rgba(0, 0, 0, 0.55);
@@ -437,17 +442,18 @@ textarea { min-height: 70px; resize: vertical; }
 /* --- Barre d'onglets --- */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
   height: calc(var(--tabbar-h) + var(--safe-b)); padding-bottom: var(--safe-b);
   background: rgba(15,18,24,.94); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--line);
 }
 .tab {
   border: 0; background: transparent; color: var(--muted); display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 2px; font-size: 10px; font-weight: 700;
-  padding: 0 1px; line-height: 1.1;
+  align-items: center; justify-content: center; gap: 2px; font-size: 9px; font-weight: 700;
+  min-width: 0; padding: 0; line-height: 1.1;
 }
-.tab .ico { font-size: 18px; filter: grayscale(1) opacity(.6); transition: filter .15s; }
+.tab > span:last-child { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab .ico { font-size: 16px; filter: grayscale(1) opacity(.6); transition: filter .15s; }
 .tab.active { color: var(--accent); }
 .tab.active .ico { filter: none; }
 
@@ -526,6 +532,50 @@ textarea { min-height: 70px; resize: vertical; }
   border: 1px solid #E10600; background: #080404; color: #E10600;
   font-size: 18px; display: inline-flex; align-items: center; justify-content: center;
 }
+.home-timer {
+  position: fixed; z-index: 30; left: 50%; transform: translateX(-50%);
+  width: min(544px, calc(100% - 16px));
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + 6px);
+  height: 102px; box-sizing: border-box; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  padding: 6px 8px; border-radius: 14px;
+  background: #080404; color: #f2f5f8; border: 1px solid #E10600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+}
+.home-timer-top { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.home-timer .timer-picks { flex: 1; gap: 6px; }
+.home-timer .timer-picks button {
+  min-height: 32px; border-radius: 8px; font-size: 13px; padding: 0 4px;
+}
+.home-timer-clock {
+  min-width: 72px; text-align: right;
+  font-family: "Russo One", sans-serif; font-size: 28px; line-height: 1; color: #E10600;
+  font-variant-numeric: tabular-nums;
+}
+.home-timer-status {
+  margin: 0; height: 14px; overflow: hidden; white-space: nowrap;
+  text-align: center; font-size: 11px; line-height: 14px; color: #E10600;
+  font-family: "Russo One", sans-serif;
+}
+.home-timer-actions { display: flex; align-items: center; gap: 6px; }
+.home-timer-actions #timer-dur { display: flex; gap: 6px; }
+.home-timer-actions button {
+  min-height: 32px; padding: 0 8px; border-radius: 8px;
+  border: 1px solid #5a1814; background: #140808; color: #f2f5f8;
+  font-size: 12px; font-weight: 800;
+}
+.home-timer-actions #timer-start,
+.home-timer-actions #timer-pause,
+.home-timer-actions #timer-resume {
+  flex: 1; background: #E10600; border-color: #E10600; color: #fff;
+  font-family: "Russo One", sans-serif; font-weight: 400;
+}
+.home-timer-actions button:disabled { opacity: .4; }
+html:has(body.home),
+body.home { scroll-padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 116px); }
+body.home #app { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 130px); }
+body.home .music-float { bottom: calc(var(--tabbar-h) + var(--safe-b) + 116px); }
+body.home.music-live #app { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 188px); }
 .timer-fab {
   position: fixed; z-index: 45; right: 14px;
   bottom: calc(var(--tabbar-h) + var(--safe-b) + 12px);
