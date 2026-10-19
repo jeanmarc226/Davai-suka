@@ -515,6 +515,7 @@ function render() {
   const app = document.getElementById('app');
   app.innerHTML = ({ accueil: viewHome, semaine: viewWeek, calories: viewCalories, programme: viewProgram, trophees: viewTrophees })[tab]();
   maybeShowTrophyOverlay();
+  musicPaint();
 }
 
 /* ----- 1. Accueil ----- */
@@ -566,7 +567,7 @@ function viewHome() {
     } else {
       h += `<button class="btn orange" data-action="start-bonus">Séance bonus</button>`;
     }
-    h += `<button class="btn ghost" data-action="undo-session">Annuler la séance du jour</button>`;
+    h += `${musicPanelHtml()}<button class="btn ghost" data-action="undo-session">Annuler la séance du jour</button>`;
     return h;
   }
 
@@ -576,6 +577,7 @@ function viewHome() {
       <div class="muted">${exs.length} exercices · ≈ ${planMin} min d’effort · ≈ ${fmtKcal(planKcal)} kcal <span class="badge">Estimation</span></div>
       <div style="height:14px"></div>
       <button class="btn primary" data-action="start">▶ Commencer la séance du jour</button>
+      ${musicPanelHtml()}
     </div>`;
     return h;
   }
@@ -587,6 +589,7 @@ function viewHome() {
     <div class="progress"><div style="width:${pct}%"></div></div>
     ${exerciseChecklist(t.checked, 'toggle-ex')}
   </div>
+  ${musicPanelHtml()}
   <button class="btn primary" data-action="finish">🏁 Séance terminée</button>
   <p class="muted small" style="text-align:center">Les calories sont calculées sur les exercices cochés (tous si aucun n’est coché).</p>`;
   return h;
@@ -778,7 +781,7 @@ function chartSVG(all) {
 /* ----- 4. Programme ----- */
 function viewProgram() {
   const list = state.program;
-  let h = `<h2 class="screen-title">Programme</h2><div class="card"><h3>Ma séance</h3>`;
+  let h = `<h2 class="screen-title">Programme</h2>${musicPanelHtml()}<div class="card"><h3>Ma séance</h3>`;
   if (!list.length) h += `<div class="muted" style="margin-bottom:10px">Programme vide — ajoutez un exercice.</div>`;
   list.forEach((e, i) => {
     const pause = e.kind === 'pause';
@@ -1103,6 +1106,7 @@ function timerStart() {
   timerUnlockAudio();
   timerWake(true);
   timerPaint(true);
+  if (musicWith) musicPlay();
 }
 function timerPause() {
   if (timer.phase !== 'countdown' && timer.phase !== 'running') return;
@@ -1198,6 +1202,14 @@ function timerMount() {
       </button>
       <button type="button" class="timer-bar-btn" id="timer-bar-toggle" data-action="timer-pause">Pause</button>
     </div>
+    <audio id="music-audio" preload="none" playsinline>
+      <source src="audio/playlist.ogg" type="audio/ogg">
+      <source src="audio/playlist.mp3" type="audio/mpeg">
+    </audio>
+    <div id="music-float" class="music-float hidden">
+      <span class="music-float-name">Musique</span>
+      <button type="button" id="music-float-btn" class="music-float-btn" data-action="music-pause">Pause</button>
+    </div>
     <section id="timer-screen" class="timer-screen hidden" aria-label="Minuteur">
       <button type="button" class="timer-close" data-action="timer-close">Fermer</button>
       <h2>Minuteur</h2>
@@ -1220,6 +1232,7 @@ function timerMount() {
       <button type="button" id="timer-pause" class="btn timer-go" data-action="timer-pause">Pause</button>
       <button type="button" id="timer-resume" class="btn timer-go" data-action="timer-resume">Reprendre</button>
       <button type="button" id="timer-reset" class="btn timer-stop" data-action="timer-reset">Réinitialiser</button>
+      ${musicPanelHtml()}
       <p class="timer-note">Ce minuteur n’enregistre aucune séance.</p>
     </section>`;
 }
@@ -1310,6 +1323,7 @@ function timerPaint(full) {
   show('timer-pause', timer.phase === 'countdown' || timer.phase === 'running');
   show('timer-resume', timer.phase === 'paused');
   show('timer-reset', timer.phase !== 'idle');
+  musicPaint();
 }
 function onTimerAction(el) {
   const action = el.dataset.action;
@@ -1324,13 +1338,124 @@ function onTimerAction(el) {
 }
 function timerInit() {
   timer = loadTimer();
+  loadMusicPref();
   timerMount();
+  musicBind();
   timerCatchUp();
   if (timer.phase === 'done' && !timer.alarmed) timerAlarm();
   timerWake(timer.phase === 'countdown' || timer.phase === 'running');
   timerPaint(true);
   setInterval(() => timerPaint(false), 200);
 }
+/* =========================================================================
+   Musique de séance
+   Préférence uniquement dans davaisuka.music.v1.
+   Le lecteur n’écrit rien dans les séances ni les trophées.
+   ========================================================================= */
+const MUSIC_KEY = 'davaisuka.music.v1';
+let musicWith = true;
+let musicEnded = false;
+
+function loadMusicPref() {
+  try {
+    const raw = localStorage.getItem(MUSIC_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (d && typeof d.withMusic === 'boolean') musicWith = d.withMusic;
+  } catch (e) {}
+}
+function musicState() {
+  const a = document.getElementById('music-audio');
+  if (!a || musicEnded) return 'idle';
+  if (!a.paused) return 'playing';
+  if (a.currentTime > 0.2) return 'paused';
+  return 'idle';
+}
+function musicPanelHtml() {
+  const st = musicState();
+  return `<div class="music-box">
+    <div class="music-head">
+      <h3>Musique</h3>
+      <button type="button" class="music-toggle${musicWith ? ' on' : ''}" data-action="music-toggle" aria-pressed="${musicWith ? 'true' : 'false'}">Avec musique</button>
+    </div>
+    <p class="music-hint">Deux morceaux enchaînés, hors ligne.</p>
+    <div class="music-actions">
+      <button type="button" class="btn music-go music-play${st === 'idle' ? '' : ' hidden'}" data-action="music-play">Musique</button>
+      <button type="button" class="btn music-go music-pause${st === 'playing' ? '' : ' hidden'}" data-action="music-pause">Pause</button>
+      <button type="button" class="btn music-go music-resume${st === 'paused' ? '' : ' hidden'}" data-action="music-resume">Reprendre</button>
+      <button type="button" class="btn music-stop-btn music-stop${st === 'idle' ? ' hidden' : ''}" data-action="music-stop">Arrêter</button>
+    </div>
+  </div>`;
+}
+function musicPaint() {
+  const st = musicState();
+  const hide = (sel, off) => document.querySelectorAll(sel).forEach((el) => el.classList.toggle('hidden', off));
+  hide('.music-play', st !== 'idle');
+  hide('.music-pause', st !== 'playing');
+  hide('.music-resume', st !== 'paused');
+  hide('.music-stop', st === 'idle');
+  document.querySelectorAll('.music-toggle').forEach((el) => {
+    el.classList.toggle('on', musicWith);
+    el.setAttribute('aria-pressed', musicWith ? 'true' : 'false');
+  });
+  const float = document.getElementById('music-float');
+  if (!float) return;
+  const show = st !== 'idle' && !timerScreenOn;
+  float.classList.toggle('hidden', !show);
+  document.body.classList.toggle('music-live', show);
+  const btn = document.getElementById('music-float-btn');
+  if (btn) {
+    const playing = st === 'playing';
+    btn.textContent = playing ? 'Pause' : 'Reprendre';
+    btn.dataset.action = playing ? 'music-pause' : 'music-resume';
+  }
+}
+function musicPlay() {
+  const a = document.getElementById('music-audio');
+  if (!a) return;
+  if (musicEnded || a.ended) {
+    try { a.currentTime = 0; } catch (e) {}
+  }
+  musicEnded = false;
+  const pending = a.play();
+  if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+  musicPaint();
+}
+function musicPause() {
+  const a = document.getElementById('music-audio');
+  if (a) a.pause();
+  musicPaint();
+}
+function musicStop() {
+  const a = document.getElementById('music-audio');
+  if (!a) return;
+  a.pause();
+  musicEnded = false;
+  try { a.currentTime = 0; } catch (e) {}
+  musicPaint();
+}
+function musicToggle() {
+  musicWith = !musicWith;
+  try { localStorage.setItem(MUSIC_KEY, JSON.stringify({ withMusic: musicWith })); }
+  catch (e) {}
+  musicPaint();
+}
+function musicBind() {
+  const a = document.getElementById('music-audio');
+  if (!a || a.dataset.bound) return;
+  a.dataset.bound = '1';
+  a.addEventListener('play', () => { musicEnded = false; musicPaint(); });
+  a.addEventListener('pause', () => musicPaint());
+  a.addEventListener('ended', () => { musicEnded = true; musicPaint(); });
+}
+function onMusicAction(el) {
+  const action = el.dataset.action;
+  if (action === 'music-play' || action === 'music-resume') musicPlay();
+  else if (action === 'music-pause') musicPause();
+  else if (action === 'music-stop') musicStop();
+  else if (action === 'music-toggle') musicToggle();
+}
+
 function timerOnVisible() {
   if (!timer) return;
   timerCatchUp();
@@ -1421,10 +1546,11 @@ document.addEventListener('click', (ev) => {
   const el = ev.target.closest('[data-action]');
   if (!el || el.disabled) return;
   if (el.dataset.action.startsWith('timer-')) { onTimerAction(el); return; }
+  if (el.dataset.action.startsWith('music-')) { onMusicAction(el); return; }
   const id = el.dataset.id;
   switch (el.dataset.action) {
     case 'close-trophies': dismissTrophyOverlay(); break;
-    case 'start': ensureToday().started = true; save(); render(); break;
+    case 'start': ensureToday().started = true; save(); render(); if (musicWith) musicPlay(); break;
     case 'toggle-ex': {
       const t = ensureToday();
       t.checked = t.checked.includes(id) ? t.checked.filter((x) => x !== id) : [...t.checked, id];
@@ -1435,7 +1561,7 @@ document.addEventListener('click', (ev) => {
       if (!mainSessionOn(todayKey())) return;
       const t = ensureToday();
       t.bonus = { started: true, checked: [] };
-      save(); render(); break;
+      save(); render(); if (musicWith) musicPlay(); break;
     }
     case 'toggle-bonus-ex': {
       const t = ensureToday();
