@@ -61,17 +61,17 @@ const DAY_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
    kcal = MET × poids (kg) × durée (heures)
    Durée = valeur (si exercice en durée) ou répétitions × secondes par répétition. */
 const MET_PROFILES = [
-  { keys: ['mountain'], met: 8, spr: 1, label: 'Mountain climbers' },
-  { keys: ['pull-up', 'pull up', 'pullup', 'traction', 'hanging', 'suspension', 'barre fixe'], met: 8, spr: 3, label: 'Tractions / suspension' },
-  { keys: ['push-up', 'push up', 'pushup', 'pompe'], met: 8, spr: 2, label: 'Pompes / push-ups' },
-  { keys: ['planche', 'plank', 'gainage'], met: 4, spr: 3, label: 'Planche / gainage' },
-  { keys: ['burpee'], met: 8, spr: 4, label: 'Burpees' },
-  { keys: ['jumping', 'saut', 'corde'], met: 8, spr: 1, label: 'Sauts / jumping jacks' },
-  { keys: ['squat', 'fente', 'lunge'], met: 5, spr: 3, label: 'Squats / fentes' },
-  { keys: ['abdo', 'crunch', 'sit-up'], met: 3.8, spr: 2, label: 'Abdos / crunchs' },
-  { keys: ['dips'], met: 8, spr: 2, label: 'Dips' }
+  { keys: ['mountain'], met: 8, spr: 1, label: 'Mountain climbers', noun: 'Mountain Climber', metNames: ['Mountain Climbers'] },
+  { keys: ['pull-up', 'pull up', 'pullup', 'traction', 'hanging', 'suspension', 'barre fixe'], met: 8, spr: 3, label: 'Tractions / suspension', noun: 'Traction', metNames: ['Tractions', 'Suspension'] },
+  { keys: ['push-up', 'push up', 'pushup', 'pompe'], met: 8, spr: 2, label: 'Pompes / push-ups', noun: 'Pompe', metNames: ['Pompes'] },
+  { keys: ['planche', 'plank', 'gainage'], met: 5, spr: 3, label: 'Planche / gainage', noun: 'Planche', metNames: ['Planche', 'Gainage'] },
+  { keys: ['burpee'], met: 8, spr: 4, label: 'Burpees', noun: 'Burpee', metNames: ['Burpees'] },
+  { keys: ['jumping', 'saut', 'corde'], met: 8, spr: 1, label: 'Sauts / jumping jacks', noun: 'Saut', metNames: ['Sauts'] },
+  { keys: ['squat', 'fente', 'lunge'], met: 5, spr: 3, label: 'Squats / fentes', noun: 'Squat ou Fente', metNames: ['Squats', 'Fentes'] },
+  { keys: ['abdo', 'crunch', 'sit-up'], met: 3.8, spr: 2, label: 'Abdos / crunchs', noun: 'Abdo', metNames: ['Abdos'] },
+  { keys: ['dips'], met: 8, spr: 2, label: 'Dips', noun: 'Dip', metNames: ['Dips'] }
 ];
-const MET_DEFAULT = { met: 5, spr: 3, label: 'Autre exercice (par défaut)' };
+const MET_DEFAULT = { met: 5, spr: 3, label: 'Autre exercice (par défaut)', noun: 'Autre exercice', metNames: ['Autre exercice'] };
 
 function normalize(s) {
   return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -803,7 +803,7 @@ function viewCalories() {
     <div class="stat"><div class="v">${sess.length ? fmtKcal(sess[sess.length - 1].kcal) : '–'}</div><div class="l">Dernière séance (kcal)</div></div>
     <div class="stat"><div class="v">${sess.length ? fmtKcal(avg) : '–'}</div><div class="l">Moyenne / séance</div></div>
   </div>
-  <div class="card kcal-card"><h3>Évolution</h3>${kcalChartHtml()}</div>
+  <div class="card kcal-card"><h3>Graphique</h3>${kcalChartHtml()}</div>
   ${formulaDetails(planKcal)}
   ${settingsFold()}`;
   return h;
@@ -1010,19 +1010,41 @@ function kcalChartHtml() {
   h += `<div class="kcal-plot">${kcalChartSVG(model)}<div id="kcal-tip" class="kcal-tip hidden"></div></div>`;
   return h;
 }
+function sprLegendHtml() {
+  const unit = (n) => {
+    const v = Number(n);
+    const shown = Number.isInteger(v) ? String(v) : String(v).replace('.', ',');
+    return shown + (v > 1 ? ' secondes' : ' seconde');
+  };
+  return `<ul class="spr-legend">${[...MET_PROFILES, MET_DEFAULT].map((p) => `<li>${esc(unit(p.spr) + ' / ' + p.noun)}</li>`).join('')}</ul>`;
+}
+function metLegendHtml() {
+  const groups = [];
+  for (const p of [...MET_PROFILES, MET_DEFAULT]) {
+    let g = groups.find((x) => x.met === p.met);
+    if (!g) { g = { met: p.met, names: [] }; groups.push(g); }
+    for (const name of p.metNames) if (!g.names.includes(name)) g.names.push(name);
+  }
+  return `<ul class="spr-legend">${groups.map((g) => {
+    const shown = Number.isInteger(g.met) ? String(g.met) : String(g.met).replace('.', ',');
+    return `<li>${esc(g.names.join(' / ') + ' = ' + shown + ' MET')}</li>`;
+  }).join('')}</ul>`;
+}
 function formulaDetails(planKcal) {
   const weight = fmtWeight(state.weight) + (state.weightSet ? '' : ' (valeur par défaut — modifiable dans Réglages ⚙️)');
+  const explain = 'MET (équivalent métabolique) : l’intensité d’un effort comparée au repos. 1 MET = assis sans bouger, 8 MET = environ 8 fois plus d’énergie.';
   const rows = [
-    ['Formule', 'kcal = MET × poids (kg) × durée (h)'],
-    ['Poids', 'Poids utilisé : ' + weight],
-    ['Durée', 'Durée estimée par exercice : ≈ 2 s par pompe, 1 s par mountain climber, 3 s par traction…'],
-    ['MET', 'Pompes / mountain climbers / tractions ≈ 8, planche ≈ 4'],
-    ['Séance actuelle', '≈ ' + fmtKcal(planKcal) + ' kcal'],
-    ['Séances passées', 'Les calories de chaque séance sont figées au moment où elle est terminée']
+    ['Formule', esc('kcal = MET × poids (kg) × durée (h)')],
+    ['Poids', esc('Poids utilisé : ' + weight)],
+    ['Durée', sprLegendHtml()],
+    ['MET', metLegendHtml()],
+    ['Séance actuelle', esc('≈ ' + fmtKcal(planKcal) + ' kcal')],
+    ['Séances passées', esc('Les calories de chaque séance sont figées au moment où elle est terminée')]
   ];
   return `<div class="card calc-card"><details class="calc-details fold" id="calc-formula"${foldAttr('calc-formula')}>
-    <summary>Comment c’est calculé <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
-    <dl class="calc-legend">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+    <summary><span class="calc-q" aria-hidden="true">?</span><span class="calc-title">Méthode de calcul des calories</span><span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
+    <p class="calc-note">${esc(explain)}</p>
+    <dl class="calc-legend">${rows.map(([k, v]) => `<div${k === 'Durée' || k === 'MET' ? ' class="calc-duration"' : ''}><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join('')}</dl>
   </details></div>`;
 }
 function bindKcalChart() {
