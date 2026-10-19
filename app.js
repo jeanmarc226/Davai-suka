@@ -580,14 +580,15 @@ function viewHome() {
 
   const nDone = exs.filter((e) => t.checked.includes(e.id)).length;
   const pct = exs.length ? Math.round((nDone / exs.length) * 100) : 0;
+  const allOn = exs.length > 0 && nDone === exs.length;
   h += `<div class="card">
     <div class="row"><h3 style="margin:0">Séance du jour</h3><div class="spacer"></div><strong id="count">${nDone} / ${exs.length}</strong></div>
+    <button type="button" class="btn check-all" data-action="${allOn ? 'uncheck-all' : 'check-all'}">${allOn ? 'Tout décocher' : 'Tout cocher'}</button>
     <div class="progress"><div style="width:${pct}%"></div></div>
     ${exerciseChecklist(t.checked, 'toggle-ex')}
   </div>
   ${musicPanelHtml()}
-  <button class="btn primary" data-action="finish">🏁 Séance terminée</button>
-  <p class="muted small" style="text-align:center">Les calories sont calculées sur les exercices cochés (tous si aucun n’est coché).</p>`;
+  <button class="btn primary" data-action="finish">🏁 Séance terminée</button>`;
   return h;
 }
 function exerciseChecklist(checked, action) {
@@ -605,10 +606,10 @@ function exerciseChecklist(checked, action) {
   return html + `</ul>`;
 }
 
-/* ----- 2. Semaine ----- */
+/* ----- 2. Calendrier ----- */
 function viewWeek() {
   const mode = ui.calMode === 'month' ? 'month' : 'week';
-  let h = `<h2 class="screen-title">Semaine</h2>
+  let h = `<h2 class="screen-title">Calendrier</h2>
   <div class="seg cal-toggle" role="group" aria-label="Affichage du calendrier">
     <button type="button" data-action="cal-mode" data-mode="week" class="${mode === 'week' ? 'on' : ''}" aria-pressed="${mode === 'week'}">Semaine</button>
     <button type="button" data-action="cal-mode" data-mode="month" class="${mode === 'month' ? 'on' : ''}" aria-pressed="${mode === 'month'}">Mois</button>
@@ -649,7 +650,10 @@ function viewWeekGrid() {
   <div class="dots">${Array.from({ length: 7 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div>
   <div class="muted" id="week-motivation" style="margin-top:10px">${esc(weekMotivation(n))}</div></div>
   </div>
-  <p class="muted small" style="text-align:center">Touchez un jour pour le cocher. ★ Bonus : une séance en plus, sans calories si le jour est déjà passé. 🔥 = séance enregistrée ce jour-là.</p>`;
+  <div class="cal-legends">
+    <p class="cal-legend"><span class="check on sym" aria-hidden="true">✓</span><span>= séance complétée précédemment</span></p>
+    <p class="cal-legend"><span class="sym" aria-hidden="true">🔥</span><span>= séance enregistrée ce jour-là</span></p>
+  </div>`;
   return h;
 }
 function viewMonth() {
@@ -694,7 +698,7 @@ function viewMonth() {
   ${parts.bonus ? `<div class="bonus-note">${esc(bonusNote(parts.bonus))}</div>` : ''}
   <div class="muted" style="margin-top:8px">Présences du mois, bonus compris. Un jour coché compte dans les totaux, sans calories.</div></div>
   </div>
-  <p class="muted small" style="text-align:center">Touchez un jour pour le cocher. ★ marque une séance bonus. Les jours à venir sont verrouillés.</p>`;
+  <p class="cal-legend">Les jours à venir sont verrouillés.</p>`;
   return h;
 }
 
@@ -790,7 +794,6 @@ function viewProgram() {
         <div class="ex-name">${pause ? '— Pause —' : esc(e.name)}</div>
         ${pause ? '' : `<div class="ex-val">${esc(fmtVal(e))}</div>${e.note ? `<div class="ex-meta">${esc(e.note)}</div>` : ''}`}
       </div>
-      ${pause ? '' : timerExButton(e)}
       ${pause ? '' : `<button class="icon-btn" data-action="edit" data-id="${e.id}" aria-label="Modifier">✎</button>`}
       <button class="icon-btn del" data-action="delete" data-id="${e.id}" aria-label="Supprimer">✕</button>
     </div>`;
@@ -853,7 +856,7 @@ function viewTrophees() {
     </article>`;
   }
   if (group) h += `</div>`;
-  h += `<p class="muted small" style="text-align:center">Depuis le 18 octobre 2026. Les jours d’avant restent dans Semaine, Mois et Calories. Planche, suspension, tractions et pompes sont une estimation.</p>`;
+  h += `<p class="muted small" style="text-align:center">Depuis le 18 octobre 2026. Les jours d’avant restent dans Calendrier et Calories. Planche, suspension, tractions et pompes sont une estimation.</p>`;
   return h;
 }
 
@@ -1249,7 +1252,7 @@ function timerPaint(full) {
   if (!bar || !fab || !screen) return;
   const live = timer.phase === 'countdown' || timer.phase === 'running' || timer.phase === 'paused' || timer.phase === 'done';
   bar.classList.toggle('hidden', !live || timerScreenOn);
-  fab.classList.toggle('hidden', live || timerScreenOn);
+  fab.classList.add('hidden');
   screen.classList.toggle('hidden', !timerScreenOn);
   document.body.classList.toggle('timer-live', live && !timerScreenOn);
 
@@ -1275,6 +1278,11 @@ function timerPaint(full) {
   } else {
     if (barName) barName.textContent = TIMER_LABEL[timer.selected] || '';
     if (barTime) barTime.textContent = formatTimer(timerDisplayMs());
+  }
+  const barMain = document.querySelector('.timer-bar-main');
+  if (barMain) {
+    if (currentTab() === 'accueil') barMain.dataset.action = 'timer-open';
+    else delete barMain.dataset.action;
   }
   const toggle = document.getElementById('timer-bar-toggle');
   if (toggle) {
@@ -1322,7 +1330,10 @@ function timerPaint(full) {
 }
 function onTimerAction(el) {
   const action = el.dataset.action;
-  if (action === 'timer-open') timerOpenScreen(el.dataset.kind || '');
+  if (action === 'timer-open') {
+    if (el.classList.contains('timer-bar-main') && currentTab() !== 'accueil') return;
+    timerOpenScreen(el.dataset.kind || '');
+  }
   else if (action === 'timer-close') { timerScreenOn = false; timerPaint(true); }
   else if (action === 'timer-pick') timerPick(el.dataset.kind);
   else if (action === 'timer-step') timerStep(Number(el.dataset.d) || 0);
@@ -1456,6 +1467,23 @@ function recordSession(k, doneList, exs, bonus) {
   state.sessions.push(entry);
   return entry.kcal;
 }
+function checkAllExercises() {
+  const t = ensureToday();
+  const checked = Array.isArray(t.checked) ? t.checked.slice() : [];
+  for (const e of exercises()) {
+    if (!checked.includes(e.id)) checked.push(e.id);
+  }
+  t.checked = checked;
+  save();
+  render();
+}
+function uncheckAllExercises() {
+  const t = ensureToday();
+  const ids = new Set(exercises().map((e) => e.id));
+  t.checked = (Array.isArray(t.checked) ? t.checked : []).filter((id) => !ids.has(id));
+  save();
+  render();
+}
 function finishSession() {
   const t = ensureToday();
   const exs = exercises();
@@ -1525,6 +1553,8 @@ document.addEventListener('click', (ev) => {
       t.checked = t.checked.includes(id) ? t.checked.filter((x) => x !== id) : [...t.checked, id];
       save(); render(); break;
     }
+    case 'check-all': checkAllExercises(); break;
+    case 'uncheck-all': uncheckAllExercises(); break;
     case 'finish': finishSession(); break;
     case 'start-bonus': {
       if (!mainSessionOn(todayKey())) return;
