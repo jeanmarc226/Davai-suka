@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1218">
+  <meta name="description" content="Suivi d'entraînement quotidien">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Davai Suka</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app" aria-live="polite"></main>
+
+  <nav class="tabbar" aria-label="Navigation">
+    <button class="tab" data-tab="accueil"><span class="ico">🏠</span><span>Accueil</span></button>
+    <button class="tab" data-tab="semaine"><span class="ico">📅</span><span>Semaine</span></button>
+    <button class="tab" data-tab="calories"><span class="ico">🔥</span><span>Calories</span></button>
+    <button class="tab" data-tab="programme"><span class="ico">📝</span><span>Programme</span></button>
+  </nav>
+
+  <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true"></div>
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
