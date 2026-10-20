@@ -1137,7 +1137,7 @@ function formulaDetails(planKcal) {
     ['Séances passées', esc('Les calories de chaque séance sont figées au moment où elle est terminée')]
   ];
   return `<div class="card calc-card"><details class="calc-details fold" id="calc-formula"${foldAttr('calc-formula')}>
-    <summary><span class="calc-q" aria-hidden="true">?</span><span class="calc-title">Méthode de calcul des calories</span><span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
+    <summary>❓ Méthode de calcul des calories <span class="caret closed" aria-hidden="true">▸</span><span class="caret open" aria-hidden="true">▾</span></summary>
     <p class="calc-note">${esc(explain)}</p>
     <dl class="calc-legend">${rows.map(([k, v]) => `<div${k === 'Durée' || k === 'MET' ? ' class="calc-duration"' : ''}><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join('')}</dl>
   </details></div>`;
