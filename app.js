@@ -699,7 +699,7 @@ function viewHome() {
   if (done) {
     h += `<div class="done-banner">
       <div class="big">✅ Séance du jour terminée !</div>
-      <div style="margin-top:6px">Bravo, à demain 👊</div>
+      <div class="banner-sub">Bravo, à demain 👊</div>
     </div>`;
     if (bonusDone) {
       h += `<div class="done-banner bonus-banner">
@@ -1642,6 +1642,7 @@ function timerPaint(full) {
   if (toggle) {
     toggle.textContent = timerToggleText();
     toggle.setAttribute('aria-expanded', ui.timerOpen ? 'true' : 'false');
+    toggle.classList.toggle('is-on', timer.phase === 'countdown' || timer.phase === 'running');
   }
   const acc = document.getElementById('timer-acc');
   if (acc) acc.classList.toggle('hidden', !ui.timerOpen);
