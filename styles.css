@@ -23,6 +23,8 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
+/* pan-y : défilement vertical seulement. Bloque le pincement et le double-tap. */
+html, body, body * { touch-action: pan-y; }
 html { background: var(--bg); }
 /* Bandeau 16:9 en haut de chaque écran. z-index -1 : le fond opaque du body
    le cacherait, donc le body devient transparent quand une affiche est posée. */
@@ -72,11 +74,25 @@ body {
   overscroll-behavior-y: contain;
 }
 button, input, select, textarea { font: inherit; color: inherit; }
+input, select, textarea { font-size: 16px; }
 button { cursor: pointer; }
 
 #app {
   padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(var(--tabbar-h) + var(--safe-b) + 84px);
   max-width: 560px; margin: 0 auto;
+}
+#app.swipe-next { animation: tab-next .2s ease; }
+#app.swipe-prev { animation: tab-prev .2s ease; }
+@keyframes tab-next {
+  from { transform: translateX(22px); opacity: .55; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes tab-prev {
+  from { transform: translateX(-22px); opacity: .55; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #app.swipe-next, #app.swipe-prev { animation: none; }
 }
 
 /* --- En-têtes --- */
