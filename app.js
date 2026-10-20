@@ -699,7 +699,7 @@ function viewHome() {
   if (done) {
     h += `<div class="done-banner">
       <div class="big">✅ Séance du jour terminée !</div>
-      <div style="margin-top:6px">Bravo, à demain 👊</div>
+      <div class="banner-sub">Bravo, à demain 👊</div>
     </div>`;
     if (bonusDone) {
       h += `<div class="done-banner bonus-banner">
@@ -893,7 +893,7 @@ function settingsFold() {
   </div>`;
 }
 
-const KCAL_RANGES = ['1J', '1S', '1M', '3M', '6M', '1A', 'Tout'];
+const KCAL_RANGES = ['1J', '7J', '1M', '3M', '6M', '1A', 'Tout'];
 let kcalPlot = null;
 
 function kcalRangeId() {
@@ -919,7 +919,7 @@ function kcalBounds(range, list) {
   const now = new Date();
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (range === '1J') return { start: end, end };
-  if (range === '1S') return { start: addDays(end, -6), end };
+  if (range === '7J') return { start: addDays(end, -6), end };
   if (range === 'Tout') {
     let start = end;
     for (const s of list) {
@@ -973,7 +973,7 @@ function buildKcalModel() {
     });
     return { range, empty: points.length === 0, intraday: true, points, total: Math.round(cum * 10) / 10, change: Math.round(cum * 10) / 10 };
   }
-  if (range === '1S') {
+  if (range === '7J') {
     const { start, end } = kcalBounds(range, list);
     const byDay = {};
     const startK = dkey(start);
@@ -1052,7 +1052,7 @@ function kcalChartSVG(model) {
     const yy = pt + (ih * i) / 4;
     const val = maxY * (1 - i / 4);
     g += `<line x1="${pl}" x2="${W - pr}" y1="${yy}" y2="${yy}" stroke="#3a2424" stroke-width="1"/>`;
-    g += `<text x="${pl - 6}" y="${yy + 3}" fill="#E3B23C" font-size="10" text-anchor="end">${fmtKcal(val)}</text>`;
+    g += `<text x="${pl - 6}" y="${yy + 3}" fill="#8b96a8" font-size="10" text-anchor="end">${fmtKcal(val)}</text>`;
   }
   if (model.intraday) {
     for (const hour of [0, 6, 12, 18, 24]) {
@@ -1080,7 +1080,7 @@ function kcalChartSVG(model) {
     });
   }
   g += `<g id="kcal-cross" visibility="hidden">
-      <line id="kcal-cross-x" y1="${pt}" y2="${pt + ih}" stroke="#E3B23C" stroke-width="1" stroke-dasharray="3 3"/>
+      <line id="kcal-cross-x" y1="${pt}" y2="${pt + ih}" stroke="#E10600" stroke-width="1" stroke-dasharray="3 3"/>
       <circle id="kcal-cross-dot" r="4.5" fill="#080404" stroke="#E10600" stroke-width="2"/>
     </g></svg>`;
   return g;
@@ -1642,6 +1642,7 @@ function timerPaint(full) {
   if (toggle) {
     toggle.textContent = timerToggleText();
     toggle.setAttribute('aria-expanded', ui.timerOpen ? 'true' : 'false');
+    toggle.classList.toggle('is-on', timer.phase === 'countdown' || timer.phase === 'running');
   }
   const acc = document.getElementById('timer-acc');
   if (acc) acc.classList.toggle('hidden', !ui.timerOpen);
