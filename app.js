@@ -893,7 +893,7 @@ function settingsFold() {
   </div>`;
 }
 
-const KCAL_RANGES = ['1J', '1M', '3M', '6M', '1A', 'Tout'];
+const KCAL_RANGES = ['1J', '1S', '1M', '3M', '6M', '1A', 'Tout'];
 let kcalPlot = null;
 
 function kcalRangeId() {
@@ -919,6 +919,7 @@ function kcalBounds(range, list) {
   const now = new Date();
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (range === '1J') return { start: end, end };
+  if (range === '1S') return { start: addDays(end, -6), end };
   if (range === 'Tout') {
     let start = end;
     for (const s of list) {
@@ -971,6 +972,29 @@ function buildKcalModel() {
       };
     });
     return { range, empty: points.length === 0, intraday: true, points, total: Math.round(cum * 10) / 10, change: Math.round(cum * 10) / 10 };
+  }
+  if (range === '1S') {
+    const { start, end } = kcalBounds(range, list);
+    const byDay = {};
+    const startK = dkey(start);
+    const endK = dkey(end);
+    for (const s of list) {
+      if (s.date < startK || s.date > endK) continue;
+      byDay[s.date] = (byDay[s.date] || 0) + (Number(s.kcal) || 0);
+    }
+    const points = [];
+    let cum = 0;
+    let k = startK;
+    for (let i = 0; i < 7; i++) {
+      cum += byDay[k] || 0;
+      const d = parseKey(k);
+      const wd = DAY_SHORT[(d.getDay() + 6) % 7];
+      points.push({ key: k, axis: wd, label: wd + ' ' + fmtShort(d), y: Math.round(cum * 10) / 10 });
+      if (k === endK) break;
+      k = dkey(addDays(d, 1));
+    }
+    const total = Math.round(cum * 10) / 10;
+    return { range, empty: false, week: true, intraday: false, points, total, change: total };
   }
   const { start, end } = kcalBounds(range, list);
   const byDay = {};
@@ -1036,6 +1060,11 @@ function kcalChartSVG(model) {
       const anchor = hour === 0 ? 'start' : hour === 24 ? 'end' : 'middle';
       g += `<text x="${x}" y="${H - 8}" fill="#8b96a8" font-size="10" text-anchor="${anchor}">${hour}h</text>`;
     }
+  } else if (model.week) {
+    pts.forEach((p, i) => {
+      const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
+      g += `<text x="${xs[i].toFixed(1)}" y="${H - 8}" fill="#8b96a8" font-size="10" text-anchor="${anchor}">${esc(p.axis)}</text>`;
+    });
   } else {
     const ticks = [];
     for (let i = 0; i < 4; i++) ticks.push(Math.round(i * (n - 1) / 3));
