@@ -665,6 +665,13 @@ function render() {
   musicPaint();
   bindKcalChart();
   if (timer) timerPaint(true);
+  if (swipeAnim) {
+    const cls = swipeAnim > 0 ? 'swipe-next' : 'swipe-prev';
+    swipeAnim = 0;
+    app.classList.remove('swipe-next', 'swipe-prev');
+    void app.offsetWidth;
+    app.classList.add(cls);
+  }
 }
 
 /* ----- 1. Accueil ----- */
@@ -2057,6 +2064,52 @@ document.addEventListener('visibilitychange', () => {
   timerOnVisible();
   if (!draft) render();
 });
+
+/* Glissement entre les onglets : gauche = suivant, droite = précédent, sans boucle. */
+let swipeStart = null;
+let swipeAnim = 0;
+function swipeBlocked(target) {
+  const trophy = document.getElementById('trophy-overlay');
+  if (trophy && !trophy.classList.contains('hidden')) return true;
+  const sheet = document.getElementById('sheet');
+  if (sheet && !sheet.classList.contains('hidden')) return true;
+  const el = target && target.nodeType === 1 ? target : target && target.parentElement;
+  if (!el || !el.closest) return true;
+  if (el.closest('input, textarea, select, .kcal-plot, .tabbar, #timer-layer, .music-box, .timer-acc, .timer-slot, .timer-bar, .timer-screen')) return true;
+  let node = el;
+  while (node && node !== document.documentElement) {
+    const ox = getComputedStyle(node).overflowX;
+    if ((ox === 'auto' || ox === 'scroll') && node.scrollWidth > node.clientWidth + 1) return true;
+    node = node.parentElement;
+  }
+  return false;
+}
+document.addEventListener('touchstart', (ev) => {
+  if (ev.touches.length !== 1 || swipeBlocked(ev.target)) { swipeStart = null; return; }
+  const t = ev.touches[0];
+  swipeStart = { x: t.clientX, y: t.clientY, id: t.identifier };
+}, { passive: true });
+document.addEventListener('touchmove', (ev) => {
+  if (swipeStart && ev.touches.length !== 1) swipeStart = null;
+}, { passive: true });
+document.addEventListener('touchend', (ev) => {
+  if (!swipeStart) return;
+  const start = swipeStart;
+  swipeStart = null;
+  let t = null;
+  for (const c of ev.changedTouches) if (c.identifier === start.id) t = c;
+  if (!t) return;
+  const dx = t.clientX - start.x;
+  const dy = t.clientY - start.y;
+  if (Math.abs(dx) <= 60 || Math.abs(dx) <= 1.5 * Math.abs(dy)) return;
+  const i = TABS.indexOf(currentTab());
+  const next = i + (dx < 0 ? 1 : -1);
+  if (next < 0 || next >= TABS.length) return;
+  swipeAnim = dx < 0 ? 1 : -1;
+  location.hash = TABS[next];
+  window.scrollTo(0, 0);
+}, { passive: true });
+document.addEventListener('touchcancel', () => { swipeStart = null; }, { passive: true });
 
 document.title = APP_NAME;
 save();
