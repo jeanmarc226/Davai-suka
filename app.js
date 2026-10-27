@@ -695,8 +695,8 @@ function viewHome() {
   </section>
   <div class="stats" style="margin-top:16px">
     <div class="stat wide"><div class="v">${weekQuotaHtml(prev.main, prev.bonus)}</div><div class="l">Séances complétées la semaine passée</div></div>
-    <div class="stat"><div class="v">${weekQuotaHtml(week.main, week.bonus)}</div><div class="l">Séances complétées cette semaine</div></div>
-    <div class="stat"><div class="v o">${state.sessions.length}</div><div class="l">Séances complétées au total</div></div>
+    <div class="stat"><div class="v">${weekQuotaHtml(week.main, week.bonus)}</div><div class="l">Séances complétées<br>cette semaine</div></div>
+    <div class="stat"><div class="v o">${state.sessions.length}</div><div class="l">Séances complétées<br>au total</div></div>
   </div>`;
 
   if (done) {
