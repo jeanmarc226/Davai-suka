@@ -693,10 +693,10 @@ function viewHome() {
     <p class="motto"><span class="motto-line">${esc(motto)}</span><span class="motto-by">${esc(mottoBy)}</span></p>
     <span class="date-pill">📅 ${esc(fmtLong(now))}</span>
   </section>
-  <div class="stats" style="margin-top:16px">
-    <div class="stat wide"><div class="v">${weekQuotaHtml(prev.main, prev.bonus)}</div><div class="l">Séances complétées la semaine passée</div></div>
-    <div class="stat"><div class="v">${weekQuotaHtml(week.main, week.bonus)}</div><div class="l">Séances complétées<br>cette semaine</div></div>
-    <div class="stat"><div class="v o">${state.sessions.length}</div><div class="l">Séances complétées<br>au total</div></div>
+  <div class="stats home-stats" style="margin-top:16px">
+    <div class="stat"><div class="v">${weekQuotaHtml(prev.main, prev.bonus)}</div><div class="l"><span class="l-main">Séances complétées</span><span class="l-sub">semaine passée</span></div></div>
+    <div class="stat"><div class="v">${weekQuotaHtml(week.main, week.bonus)}</div><div class="l"><span class="l-main">Séances complétées</span><span class="l-sub">cette semaine</span></div></div>
+    <div class="stat"><div class="v">${state.sessions.length}</div><div class="l"><span class="l-main">Séances complétées</span><span class="l-sub">au total</span></div></div>
   </div>`;
 
   if (done) {
