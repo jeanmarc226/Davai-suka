@@ -684,7 +684,9 @@ function viewHome() {
   const exs = exercises();
   const motto = 'Dur à l’entraînement, facile au combat';
   const mottoBy = '— Maréchal Alexandre Souvorov';
-  const week = weekParts(mondayOf(now));
+  const monday = mondayOf(now);
+  const week = weekParts(monday);
+  const prev = weekParts(addDays(monday, -7));
 
   let h = `<section class="hero">
     <h1 class="app-name" aria-label="${esc(APP_NAME)}">ДАVАЙ SUКА</h1>
@@ -692,8 +694,9 @@ function viewHome() {
     <span class="date-pill">📅 ${esc(fmtLong(now))}</span>
   </section>
   <div class="stats" style="margin-top:16px">
-    <div class="stat"><div class="v">${weekQuotaHtml(week.main, week.bonus)}</div><div class="l">Cette semaine</div></div>
-    <div class="stat"><div class="v o">${state.sessions.length}</div><div class="l">Séances au total</div></div>
+    <div class="stat wide"><div class="v">${weekQuotaHtml(prev.main, prev.bonus)}</div><div class="l">Séances complétées la semaine passée</div></div>
+    <div class="stat"><div class="v">${weekQuotaHtml(week.main, week.bonus)}</div><div class="l">Séances complétées<br>cette semaine</div></div>
+    <div class="stat"><div class="v o">${state.sessions.length}</div><div class="l">Séances complétées<br>au total</div></div>
   </div>`;
 
   if (done) {

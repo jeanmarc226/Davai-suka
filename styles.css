@@ -267,6 +267,7 @@ h3 {
 /* --- Statistiques --- */
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
 .stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.stat.wide { grid-column: 1 / -1; }
 .stat .v {
   font-family: "Rubik Mono One", sans-serif;
   font-size: 18px; font-weight: 400; color: var(--text); line-height: 1.2; white-space: nowrap;
@@ -276,7 +277,7 @@ h3 {
   font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0;
 }
 .stat .v.o { color: var(--text); }
-.stat .l { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.stat .l { color: var(--muted); font-size: 13px; line-height: 1.25; margin-top: 4px; }
 .badge {
   display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   padding: 3px 8px; border-radius: 6px; background: var(--card2); color: var(--muted);
